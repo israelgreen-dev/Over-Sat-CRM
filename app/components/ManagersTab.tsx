@@ -42,10 +42,10 @@ export default function ManagersTab({
       (o) => (o.owner as string)?.toLowerCase() === name.toLowerCase(),
     )
     const forecast = opps.reduce((s, o) => s + (o.value ?? 0), 0)
-    const closed   = opps.filter((o) => o.stage === 'Win').reduce((s, o) => s + ((o as any).final_win_value ?? 0), 0)
+    const closed   = opps.filter((o) => o.stage === 'Win').reduce((s, o) => s + ((o as any).final_win_value ?? o.value ?? 0), 0)
     const open     = opps.filter((o) => !['Win', 'Loss'].includes(o.stage)).reduce((s, o) => s + (o.value ?? 0), 0)
     const target   = managerTargets[name] ?? 0
-    const pct      = target > 0 ? Math.min(Math.round((forecast / target) * 100), 999) : 0
+    const pct      = target > 0 ? Math.min(Math.round((closed / target) * 100), 999) : 0
     const topDeals = [...opps].sort((a, b) => (b.value ?? 0) - (a.value ?? 0)).slice(0, 3)
     return { name, target, forecast, closed, open, pct, topDeals, count: opps.length }
   })
@@ -99,7 +99,7 @@ function ManagerCard({ m, color }: { m: ManagerRow; color: string }) {
           <div className="mb-1 flex justify-between text-xs text-gray-500">
             <span>Achievement</span>
             <span className="font-medium text-gray-700">
-              {fmtShort(m.forecast)} / {fmtShort(m.target)}
+              {fmtShort(m.closed)} / {fmtShort(m.target)}
             </span>
           </div>
           <div className="h-2.5 w-full overflow-hidden rounded-full bg-gray-100">

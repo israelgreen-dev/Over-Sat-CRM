@@ -1,195 +1,445 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
+import { supabase } from '@/lib/supabase'
+import { toUSD } from '@/lib/currency'
 import { type Opportunity } from './OpportunitiesTable'
-import DashboardAnalytics, { GLOBAL_TARGET, MANAGER_TARGETS } from './DashboardAnalytics'
+import DashboardAnalytics, { MANAGER_TARGETS } from './DashboardAnalytics'
 import ManagersTab from './ManagersTab'
 import PipelineTab from './PipelineTab'
 import SettingsTab from './SettingsTab'
+import AnalyticsTab from './AnalyticsTab'
+import LoginScreen from './LoginScreen'
+import SetupScreen from './SetupScreen'
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+// ── Module-level constants ─────────────────────────────────────────────────────
+// CURRENT_YEAR is evaluated once at module load — never changes within a session,
+// and avoids the new Date() SSR/client hydration mismatch in useState initialisers.
 const HEAD_OF_SALES    = 'head_of_sales'
 const MANAGER_NAMES    = Object.keys(MANAGER_TARGETS)
 const DEFAULT_PRODUCTS = ['Python5', 'Python7', 'Mantis10', 'Rigel', 'Griffin', 'Scorpion', 'Cameleon']
 const COLOR_PALETTE    = ['#3b82f6','#10b981','#f59e0b','#8b5cf6','#ef4444','#06b6d4','#f97316','#ec4899','#84cc16','#6366f1']
+const CURRENT_YEAR     = String(new Date().getFullYear())
 
-type Tab = 'Dashboard' | 'Sales Managers' | 'Pipeline' | 'Settings'
+type Tab = 'Dashboard' | 'Sales Managers' | 'My Performance' | 'Pipeline' | 'Analytics' | 'Settings'
 
-function fmtCurrency(n: number) {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency', currency: 'USD', maximumFractionDigits: 0,
-  }).format(n)
+type UserProfile = {
+  id: string
+  name: string
+  role: 'admin' | 'head_of_sales' | 'manager' | 'partner'
+  email: string
 }
+
+// Hoisted so the Intl object is created once, not on every render.
+const currencyFmt = new Intl.NumberFormat('en-US', {
+  style: 'currency', currency: 'USD', maximumFractionDigits: 0,
+})
+function fmtCurrency(n: number) { return currencyFmt.format(n) }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function Dashboard({ opportunities }: { opportunities: Opportunity[] }) {
+  // ── Auth state ────────────────────────────────────────────────────────────
+  const [authLoading, setAuthLoading] = useState(true)
+  const [profile, setProfile]         = useState<UserProfile | null>(null)
+
+  useEffect(() => {
+    async function loadProfile(userId: string, email: string, metadata: Record<string, string>) {
+      const p: UserProfile = {
+        id: userId,
+        email,
+        name: metadata?.name ?? '',
+        role: (metadata?.role ?? '') as UserProfile['role'],
+      }
+      setProfile(p)
+      if (p.role === 'manager' || p.role === 'partner') {
+        setViewAs(p.name)
+      } else {
+        setViewAs(HEAD_OF_SALES)
+      }
+      setAuthLoading(false)
+    }
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) loadProfile(session.user.id, session.user.email ?? '', session.user.user_metadata)
+      else setAuthLoading(false)
+    })
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) loadProfile(session.user.id, session.user.email ?? '', session.user.user_metadata)
+      else { setProfile(null); setAuthLoading(false) }
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  const handleLogout = useCallback(async () => {
+    await supabase.auth.signOut()
+    setProfile(null)
+    setViewAs(HEAD_OF_SALES)
+  }, [])
+
+  const isAdmin      = profile?.role === 'admin'
+  const isLockedView = profile?.role === 'manager' || profile?.role === 'partner'
+
   const [viewAs, setViewAs]           = useState<string>(HEAD_OF_SALES)
   const [activeTab, setActiveTab]     = useState<Tab>('Dashboard')
   const [addFormOpen, setAddFormOpen] = useState(false)
+  const [viewerOpen, setViewerOpen]   = useState(false)
+  const viewerRef                     = useRef<HTMLDivElement>(null)
 
-  // ── Live opportunities state (kept in sync with edits/adds from Pipeline) ──
+  // ── Live opportunities (kept in sync with Pipeline edits/adds) ────────────
   const [liveOpps, setLiveOpps] = useState<Opportunity[]>(opportunities)
 
-  function handleOppUpdated(updated: Opportunity) {
+  const handleOppUpdated = useCallback((updated: Opportunity) => {
     setLiveOpps((prev) => prev.map((o) => (o.id === updated.id ? updated : o)))
-  }
+  }, [])
 
-  function handleOppAdded(newOpp: Opportunity) {
+  const handleOppAdded = useCallback((newOpp: Opportunity) => {
     setLiveOpps((prev) => [newOpp, ...prev])
-  }
-  const [logoUrl, setLogoUrl]         = useState<string | null>(null)
-  const logoInputRef                  = useRef<HTMLInputElement>(null)
+  }, [])
 
-  // Load persisted logo on mount
+  const handleOppDeleted = useCallback((id: string | number) => {
+    setLiveOpps((prev) => prev.filter((o) => o.id !== id))
+  }, [])
+
+
   useEffect(() => {
-    const saved = localStorage.getItem('oversat_crm_logo')
-    if (saved) setLogoUrl(saved)
+    function handleClick(e: MouseEvent) {
+      if (viewerRef.current && !viewerRef.current.contains(e.target as Node)) {
+        setViewerOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
   // ── Editable lists (Settings) ─────────────────────────────────────────────
-  const [managers, setManagers]     = useState<string[]>([...MANAGER_NAMES])
-  const [products, setProducts]     = useState<string[]>(DEFAULT_PRODUCTS)
+  const [managers, setManagers]       = useState<string[]>([...MANAGER_NAMES])
+  const [products, setProducts]       = useState<string[]>(DEFAULT_PRODUCTS)
   const [headOfSales, setHeadOfSales] = useState<string>(MANAGER_NAMES[0] ?? '')
+  const [partners, setPartners]       = useState<string[]>([])
 
-  // ── Editable targets ─────────────────────────────────────────────────────
-  const [overallTarget, setOverallTarget]   = useState<number>(GLOBAL_TARGET)
-  const [managerTargets, setManagerTargets] = useState<Record<string, number>>({ ...MANAGER_TARGETS })
+  // ── Year selector ─────────────────────────────────────────────────────────
+  const [selectedYear, setSelectedYear] = useState<string>(CURRENT_YEAR)
 
-  // ── Derived ───────────────────────────────────────────────────────────────
-  const isHoS = viewAs === HEAD_OF_SALES || viewAs === headOfSales
+  // ── Per-year targets ──────────────────────────────────────────────────────
+  const [targetsByYear, setTargetsByYear] = useState<Record<string, Record<string, number>>>({
+    [CURRENT_YEAR]: { ...MANAGER_TARGETS },
+  })
 
-  const managerColors = Object.fromEntries(
-    managers.map((n, i) => [n, COLOR_PALETTE[i % COLOR_PALETTE.length]]),
+  // Stable reference: only creates a new object when selectedYear or targetsByYear changes.
+  const managerTargets = useMemo(
+    () => targetsByYear[selectedYear] ?? {},
+    [targetsByYear, selectedYear],
   )
 
-  const tabs: Tab[] = isHoS
-    ? ['Dashboard', 'Sales Managers', 'Pipeline', 'Settings']
-    : ['Dashboard', 'Pipeline']
+  const setManagerTargets = useCallback(
+    (v: Record<string, number>) =>
+      setTargetsByYear((prev) => ({ ...prev, [selectedYear]: v })),
+    [selectedYear],
+  )
+
+  // ── Load settings from localStorage after hydration ───────────────────────
+  const [settingsLoaded, setSettingsLoaded] = useState(false)
+
+  useEffect(() => {
+    try {
+      const m = localStorage.getItem('oversat_crm_managers')
+      if (m) setManagers(JSON.parse(m))
+      const p = localStorage.getItem('oversat_crm_products')
+      if (p) setProducts(JSON.parse(p))
+      const h = localStorage.getItem('oversat_crm_head_of_sales')
+      if (h) setHeadOfSales(h)
+      const pa = localStorage.getItem('oversat_crm_partners')
+      if (pa) setPartners(JSON.parse(pa))
+      const tby = localStorage.getItem('oversat_crm_targets_by_year')
+      if (tby) setTargetsByYear(JSON.parse(tby))
+      else {
+        const t = localStorage.getItem('oversat_crm_manager_targets')
+        if (t) setTargetsByYear({ [CURRENT_YEAR]: JSON.parse(t) })
+      }
+    } catch {}
+    setSettingsLoaded(true)
+  }, [])
+
+  // ── Persist settings ──────────────────────────────────────────────────────
+  useEffect(() => { if (settingsLoaded) localStorage.setItem('oversat_crm_managers',         JSON.stringify(managers))      }, [managers,      settingsLoaded])
+  useEffect(() => { if (settingsLoaded) localStorage.setItem('oversat_crm_products',          JSON.stringify(products))      }, [products,      settingsLoaded])
+  useEffect(() => { if (settingsLoaded) localStorage.setItem('oversat_crm_head_of_sales',     headOfSales)                   }, [headOfSales,   settingsLoaded])
+  useEffect(() => { if (settingsLoaded) localStorage.setItem('oversat_crm_partners',          JSON.stringify(partners))      }, [partners,      settingsLoaded])
+  useEffect(() => { if (settingsLoaded) localStorage.setItem('oversat_crm_targets_by_year',   JSON.stringify(targetsByYear)) }, [targetsByYear, settingsLoaded])
+
+  const overallTarget = useMemo(
+    () => Object.values(managerTargets).reduce((s, v) => s + v, 0),
+    [managerTargets],
+  )
+
+  // ── All unique managers ───────────────────────────────────────────────────
+  // Combines the Settings list with any opportunity owner not already in it.
+  const allManagers = useMemo(() => {
+    const managersLower = managers.map((n) => n.toLowerCase())
+    const extra = Array.from(new Set(
+      liveOpps
+        .map((o) => (o.owner as string) ?? '')
+        .filter((owner) => owner && !managersLower.includes(owner.toLowerCase())),
+    ))
+    return [...managers, ...extra]
+  }, [managers, liveOpps])
+
+  // ── Available years ───────────────────────────────────────────────────────
+  const availableYears = useMemo(() => {
+    const yearsFromData = Array.from(new Set(
+      liveOpps
+        .map((o) => ((o as any).close_date ?? '').match(/\d{4}/)?.[0])
+        .filter(Boolean) as string[],
+    ))
+    return Array.from(new Set([
+      ...yearsFromData,
+      CURRENT_YEAR,
+      String(Number(CURRENT_YEAR) + 1),
+      String(Number(CURRENT_YEAR) + 2),
+    ])).sort()
+  }, [liveOpps])
+
+  // ── Role-derived flags ────────────────────────────────────────────────────
+  const isHoS        = viewAs === HEAD_OF_SALES || viewAs === headOfSales
+  const isPartner    = partners.includes(viewAs)
+  const isFullAccess = isHoS || isPartner
+
+  const managerColors = useMemo(
+    () => Object.fromEntries(
+      managers.map((n, i) => [n, COLOR_PALETTE[i % COLOR_PALETTE.length]]),
+    ),
+    [managers],
+  )
+
+  const tabs = useMemo<Tab[]>(
+    () => isHoS
+      ? ['Dashboard', 'Sales Managers', 'Pipeline', 'Analytics', 'Settings']
+      : isPartner
+      ? ['Dashboard', 'Sales Managers', 'Pipeline', 'Analytics']
+      : ['Dashboard', 'My Performance', 'Pipeline', 'Analytics'],
+    [isHoS, isPartner],
+  )
   const safeTab: Tab = tabs.includes(activeTab) ? activeTab : 'Dashboard'
 
-  const visibleOpps = isHoS
-    ? liveOpps
-    : liveOpps.filter(
-        (o) => (o.owner as string)?.toLowerCase() === viewAs.toLowerCase(),
-      )
+  // ── Filtered opportunity slices ───────────────────────────────────────────
+  // Year filter applies to Analytics/Dashboard; Pipeline always shows all opps.
+  const yearFilteredOpps = useMemo(
+    () => liveOpps.filter((o) => {
+      const cd = (o as any).close_date ?? ''
+      return !cd || cd.includes(selectedYear)
+    }),
+    [liveOpps, selectedYear],
+  )
+
+  const allVisibleOpps = useMemo(
+    () => isFullAccess
+      ? liveOpps
+      : liveOpps.filter((o) => (o.owner as string)?.toLowerCase() === viewAs.toLowerCase()),
+    [isFullAccess, liveOpps, viewAs],
+  )
+
+  const visibleOpps = useMemo(
+    () => isFullAccess
+      ? yearFilteredOpps
+      : yearFilteredOpps.filter(
+          (o) => (o.owner as string)?.toLowerCase() === viewAs.toLowerCase(),
+        ),
+    [isFullAccess, yearFilteredOpps, viewAs],
+  )
 
   // ── Banner metrics ────────────────────────────────────────────────────────
-  const totalForecast = visibleOpps.reduce((s, o) => s + (o.value ?? 0), 0)
-  const closedOrders  = visibleOpps.filter((o) => o.stage === 'Win').reduce((s, o) => s + ((o as any).final_win_value ?? 0), 0)
-  const openPipeline  = visibleOpps.filter((o) => !['Win', 'Loss'].includes(o.stage)).reduce((s, o) => s + (o.value ?? 0), 0)
-  const bannerTarget  = isHoS ? overallTarget : (managerTargets[viewAs] ?? 0)
+  const { totalForecast, closedOrders, openPipeline } = useMemo(() => ({
+    totalForecast: visibleOpps.reduce((s, o) => s + toUSD(o.value ?? 0, (o as any).currency), 0),
+    closedOrders:  visibleOpps
+      .filter((o) => o.stage === 'Win')
+      .reduce((s, o) => s + toUSD((o as any).final_win_value || o.value || 0, (o as any).currency), 0),
+    openPipeline:  visibleOpps
+      .filter((o) => !['Win', 'Loss'].includes(o.stage))
+      .reduce((s, o) => s + toUSD(o.value ?? 0, (o as any).currency), 0),
+  }), [visibleOpps])
+  const bannerTarget = isFullAccess ? overallTarget : (managerTargets[viewAs] ?? 0)
 
-  function handleNewOpportunity() {
+  // ── Handlers ─────────────────────────────────────────────────────────────
+  const handleNewOpportunity = useCallback(() => {
     if (safeTab !== 'Pipeline') setActiveTab('Pipeline')
     setAddFormOpen(true)
-  }
+  }, [safeTab])
 
-  function handleManagersChange(newManagers: string[]) {
+  // Bug fix: previously called setManagerTargets(fn) where setManagerTargets
+  // only accepts Record<string,number>, so the function reference was stored as
+  // the value. Now we call setTargetsByYear directly with a functional updater.
+  const handleManagersChange = useCallback((newManagers: string[]) => {
     setManagers(newManagers)
-    // Sync target draft — keep existing values, add zero for new managers
-    setTargetDraft((d) => ({
-      ...d,
-      managers: Object.fromEntries(
-        newManagers.map((n) => [n, d.managers[n] ?? '0']),
+    setTargetsByYear((prev) => ({
+      ...prev,
+      [selectedYear]: Object.fromEntries(
+        newManagers.map((n) => [n, (prev[selectedYear] ?? {})[n] ?? 0]),
       ),
     }))
-  }
+  }, [selectedYear])
 
-  function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      const dataUrl = ev.target?.result as string
-      setLogoUrl(dataUrl)
-      localStorage.setItem('oversat_crm_logo', dataUrl)
-    }
-    reader.readAsDataURL(file)
+  // ── Auth gate ─────────────────────────────────────────────────────────────
+  if (authLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-900">
+        <p className="text-sm text-slate-400">Loading…</p>
+      </div>
+    )
   }
+  if (!profile) return <LoginScreen />
+  if (!profile.role) return <SetupScreen email={profile.email} />
 
   return (
     <div className="min-h-screen bg-gray-100 font-sans">
 
       {/* ── Top Header ──────────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-40 bg-slate-800 shadow-md">
-        <div className="mx-auto flex max-w-screen-xl flex-wrap items-center justify-between gap-3 px-6 py-4">
+      <header className="sticky top-0 z-40 border-b border-gray-200 bg-white shadow-sm">
+        <div className="mx-auto flex max-w-screen-xl items-center justify-between px-5 py-3">
 
-          {/* Logo + title */}
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => logoInputRef.current?.click()}
-              title="Click to upload a logo"
-              className="group relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white transition-opacity hover:opacity-80"
-            >
-              {logoUrl ? (
-                <img src={logoUrl} alt="Logo" className="h-full w-full object-contain p-1" />
-              ) : (
-                <svg viewBox="0 0 24 24" fill="none" className="h-7 w-7 text-slate-700" stroke="currentColor" strokeWidth={2}>
-                  <circle cx="12" cy="12" r="3" />
-                  <path d="M6.3 6.3a8 8 0 0 0 0 11.4M17.7 6.3a8 8 0 0 1 0 11.4" />
-                  <path d="M3.5 3.5a14 14 0 0 0 0 17M20.5 3.5a14 14 0 0 1 0 17" />
-                </svg>
-              )}
-              <span className="absolute inset-0 hidden items-center justify-center bg-black/50 text-xs text-white group-hover:flex">
-                Upload
-              </span>
-            </button>
-            <input
-              ref={logoInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleLogoUpload}
-            />
-            <div>
-              <h1 className="text-lg font-bold leading-tight tracking-tight text-white">
-                Over-Sat CRM
-              </h1>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Over-Sat Proprietary &amp; Confidential
-              </p>
+          {/* Logo + title — no white container needed on white header */}
+          <button
+            onClick={() => { setActiveTab('Dashboard') }}
+            title="Home"
+            className="flex items-center gap-3 transition-opacity hover:opacity-75"
+          >
+            <div className="flex h-10 w-36 shrink-0 items-center overflow-hidden">
+              <img src="/OS-Logo.png" alt="Over-Sat Logo" className="h-full w-full object-contain" />
             </div>
-          </div>
+            <span className="text-base font-bold text-gray-900">Over-Sat CRM</span>
+          </button>
 
           {/* Controls */}
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Persona selector */}
-            <div className="flex items-center gap-2 rounded-xl border border-slate-600 bg-slate-700 px-3 py-1.5">
-              <span className="text-xs text-slate-400">Viewing as</span>
-              <select
-                value={viewAs}
-                onChange={(e) => { setViewAs(e.target.value); setActiveTab('Dashboard') }}
-                className="cursor-pointer bg-transparent text-sm font-semibold text-white focus:outline-none"
-              >
-                <option value={HEAD_OF_SALES}>Head of Sales</option>
-                {managers.map((n) => <option key={n} value={n}>{n}</option>)}
-              </select>
-            </div>
+          <div className="flex items-center gap-1.5">
 
+            {/* Year selector */}
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(e.target.value)}
+              title="Select year"
+              className="cursor-pointer rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-sm font-semibold text-gray-700 focus:border-orange-400 focus:outline-none"
+            >
+              {availableYears.map((y) => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+
+            {/* Persona selector — hidden for locked roles */}
+            {!isLockedView && (
+              <div className="relative" ref={viewerRef}>
+                <button
+                  onClick={() => setViewerOpen((v) => !v)}
+                  title="Switch view"
+                  className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 transition-colors hover:bg-gray-100"
+                >
+                  <span className="max-w-[120px] truncate text-sm font-semibold text-gray-700">
+                    {viewAs === HEAD_OF_SALES ? headOfSales : viewAs}
+                  </span>
+                  <svg className={`h-3.5 w-3.5 text-gray-400 transition-transform ${viewerOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+
+                {viewerOpen && (
+                  <div className="absolute right-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl">
+                    <div className="px-3 pb-1 pt-3">
+                      <p className="mb-1 px-2 text-xs font-bold uppercase tracking-wider text-gray-400">Full Access</p>
+                      <button
+                        onClick={() => { setViewAs(HEAD_OF_SALES); setActiveTab('Dashboard'); setViewerOpen(false) }}
+                        className={`w-full rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors ${viewAs === HEAD_OF_SALES ? 'bg-orange-500 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+                      >
+                        {headOfSales}
+                      </button>
+                    </div>
+                    <div className="px-3 py-1">
+                      <p className="mb-1 px-2 text-xs font-bold uppercase tracking-wider text-gray-400">Sales Managers</p>
+                      {allManagers.map((n) => (
+                        <button
+                          key={n}
+                          onClick={() => { setViewAs(n); setActiveTab('Dashboard'); setViewerOpen(false) }}
+                          className={`w-full rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors ${viewAs === n ? 'bg-orange-500 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+                        >
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                    {partners.length > 0 && (
+                      <div className="px-3 pb-3 pt-1">
+                        <p className="mb-1 px-2 text-xs font-bold uppercase tracking-wider text-gray-400">Partners</p>
+                        {partners.map((n) => (
+                          <button
+                            key={n}
+                            onClick={() => { setViewAs(n); setActiveTab('Dashboard'); setViewerOpen(false) }}
+                            className={`w-full rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors ${viewAs === n ? 'bg-emerald-500 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+                          >
+                            {n}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Divider */}
+            <div className="mx-1 h-5 w-px bg-gray-200" />
+
+            {/* New Opportunity — orange CTA */}
             <button
               onClick={handleNewOpportunity}
-              className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-500"
+              title="New Opportunity"
+              className="flex items-center gap-1.5 rounded-lg bg-orange-500 px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-orange-400"
             >
-              + New Opportunity
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              New
             </button>
+
+            {/* Print — icon only */}
             <button
               onClick={() => window.print()}
-              className="rounded-xl border border-slate-500 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-700"
+              title="Print"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
             >
-              Print
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+              </svg>
             </button>
+
+            {/* Export CSV — icon only */}
             <button
               onClick={() => exportCSV(visibleOpps)}
-              className="rounded-xl border border-slate-500 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-700"
+              title="Export CSV"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
             >
-              Export CSV
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
             </button>
+
+            {/* Divider */}
+            <div className="mx-1 h-5 w-px bg-gray-200" />
+
+            {/* Sign out — icon only, email shown as tooltip */}
+            <button
+              onClick={handleLogout}
+              title={`Sign out — ${profile.email}`}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+            >
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+            </button>
+
           </div>
         </div>
       </header>
 
       {/* ── Pill Navigation ─────────────────────────────────────────────────── */}
-      <div className="sticky top-[72px] z-30 border-b border-gray-200 bg-white shadow-sm">
+      <div className="sticky top-[68px] z-30 border-b border-gray-200 bg-white shadow-sm">
         <div className="mx-auto flex max-w-screen-xl items-center gap-4 px-6 py-3">
           <div className="inline-flex gap-1 rounded-2xl border border-gray-200 bg-gray-100 p-1">
             {tabs.map((tab) => (
@@ -198,7 +448,7 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
                 onClick={() => setActiveTab(tab)}
                 className={`rounded-xl px-5 py-2 text-sm font-medium transition-all duration-150 ${
                   safeTab === tab
-                    ? 'bg-slate-800 text-white shadow-sm'
+                    ? 'bg-orange-500 text-white shadow-sm'
                     : 'text-gray-500 hover:text-gray-800'
                 }`}
               >
@@ -207,7 +457,7 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
             ))}
           </div>
           <span className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-semibold text-gray-500 shadow-sm">
-            {isHoS ? '👁 Full Access — Head of Sales' : `🔒 Manager View — ${viewAs}`}
+            {isHoS ? `👁 Full Access — ${headOfSales}` : isPartner ? `🤝 Partner View — ${viewAs}` : `🔒 Manager View — ${viewAs}`}
           </span>
         </div>
       </div>
@@ -217,29 +467,29 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
 
         {/* Performance Banner */}
         {(safeTab === 'Dashboard' || safeTab === 'Sales Managers') && (
-          <div className="rounded-2xl bg-slate-800 px-6 py-5 shadow-md">
+          <div className="rounded-2xl bg-gradient-to-r from-gray-900 via-slate-800 to-indigo-900 px-6 py-5 shadow-lg">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-slate-400">
-                  {isHoS ? 'Head of Sales — All Teams' : 'Manager View'}
+                  {isHoS ? `${headOfSales} — All Teams` : isPartner ? 'Partner View — All Teams' : 'Manager View'}
                 </p>
                 <h2 className="text-2xl font-bold text-white">
                   {isHoS ? headOfSales : viewAs}
                 </h2>
                 <p className="mt-0.5 text-sm text-slate-400">
-                  {isHoS ? 'Full pipeline visibility' : 'Personal pipeline'}
+                  {isFullAccess ? 'Full pipeline visibility' : 'Personal pipeline'}
                 </p>
               </div>
               <div className="flex flex-wrap gap-3">
                 {[
-                  { label: 'Overall Target',  value: fmtCurrency(bannerTarget)  },
-                  { label: 'Total Forecast',  value: fmtCurrency(totalForecast) },
-                  { label: 'Win',             value: fmtCurrency(closedOrders)  },
-                  { label: 'Open Pipeline',   value: fmtCurrency(openPipeline)  },
-                  { label: 'Opportunities',   value: String(visibleOpps.length) },
-                ].map(({ label, value }) => (
-                  <div key={label} className="min-w-[110px] rounded-xl bg-slate-700 px-4 py-3 text-center">
-                    <p className="mb-1 text-xs text-slate-400">{label}</p>
+                  { label: 'Overall Target',  value: fmtCurrency(bannerTarget),  accent: 'border-blue-500'   },
+                  { label: 'Total Forecast',  value: fmtCurrency(totalForecast), accent: 'border-indigo-400' },
+                  { label: 'Win',             value: fmtCurrency(closedOrders),  accent: 'border-emerald-400'},
+                  { label: 'Open Pipeline',   value: fmtCurrency(openPipeline),  accent: 'border-orange-400' },
+                  { label: 'Opportunities',   value: String(visibleOpps.length), accent: 'border-slate-500'  },
+                ].map(({ label, value, accent }) => (
+                  <div key={label} className={`min-w-[110px] rounded-xl border-t-2 bg-white/10 px-4 py-3 text-center backdrop-blur-sm ${accent}`}>
+                    <p className="mb-1 text-xs text-slate-300">{label}</p>
                     <p className="text-base font-bold text-white">{value}</p>
                   </div>
                 ))}
@@ -252,7 +502,7 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
         {safeTab === 'Dashboard' && (
           <DashboardAnalytics
             opportunities={visibleOpps}
-            viewAs={viewAs}
+            viewAs={isFullAccess ? HEAD_OF_SALES : viewAs}
             overallTarget={overallTarget}
             managerTargets={managerTargets}
             managers={managers}
@@ -260,7 +510,7 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
           />
         )}
 
-        {safeTab === 'Sales Managers' && isHoS && (
+        {safeTab === 'Sales Managers' && isFullAccess && (
           <ManagersTab
             opportunities={liveOpps}
             managerTargets={managerTargets}
@@ -269,25 +519,36 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
           />
         )}
 
+        {safeTab === 'My Performance' && !isHoS && (
+          <ManagersTab
+            opportunities={liveOpps}
+            managerTargets={managerTargets}
+            managers={[viewAs]}
+            managerColors={managerColors}
+          />
+        )}
+
         {safeTab === 'Pipeline' && (
           <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
             <div className="mb-4">
               <h3 className="text-sm font-bold text-gray-900">
-                {isHoS ? 'Full Pipeline' : `${viewAs}'s Pipeline`}
+                {isFullAccess ? 'Full Pipeline' : `${viewAs}'s Pipeline`}
               </h3>
               <p className="mt-0.5 text-xs text-gray-400">
-                {visibleOpps.length} opportunit{visibleOpps.length !== 1 ? 'ies' : 'y'}
+                {allVisibleOpps.length} opportunit{allVisibleOpps.length !== 1 ? 'ies' : 'y'}
               </p>
             </div>
             <PipelineTab
-              opportunities={visibleOpps}
+              opportunities={allVisibleOpps}
               addFormOpen={addFormOpen}
               onAddFormOpenChange={setAddFormOpen}
               products={products}
-              managers={isHoS ? managers : undefined}
-              defaultOwner={isHoS ? '' : viewAs}
+              managers={isFullAccess ? managers : undefined}
+              defaultOwner={managers.find((m) => m.toLowerCase() === (profile?.name ?? '').toLowerCase()) ?? managers.find((m) => (profile?.name ?? '').toLowerCase().endsWith(m.toLowerCase())) ?? profile?.name ?? ''}
+              isAdmin={isAdmin}
               onOppUpdated={handleOppUpdated}
               onOppAdded={handleOppAdded}
+              onOppDeleted={handleOppDeleted}
             />
           </div>
         )}
@@ -297,16 +558,44 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
             managers={managers}
             products={products}
             headOfSales={headOfSales}
+            partners={partners}
             onManagersChange={handleManagersChange}
             onProductsChange={setProducts}
             onHeadOfSalesChange={setHeadOfSales}
-            overallTarget={overallTarget}
+            onPartnersChange={setPartners}
             managerTargets={managerTargets}
-            onOverallTargetChange={setOverallTarget}
             onManagerTargetsChange={setManagerTargets}
+            selectedYear={selectedYear}
+            availableYears={availableYears}
+            onCopyTargetsToYear={(toYear) =>
+              setTargetsByYear((prev) => ({ ...prev, [toYear]: { ...(prev[selectedYear] ?? {}) } }))
+            }
           />
         )}
+
+        {safeTab === 'Analytics' && (
+          <AnalyticsTab
+            opportunities={visibleOpps}
+            managers={allManagers}
+            managerTargets={managerTargets}
+            managerColors={managerColors}
+            selectedYear={selectedYear}
+          />
+        )}
+
       </main>
+
+      {/* ── Footer ───────────────────────────────────────────────────────────── */}
+      {/* suppressHydrationWarning: new Date() is evaluated on both server and
+          client; the date string is identical in practice but React flags the
+          attribute as a potential mismatch. Suppressing on the wrapping span is
+          the idiomatic fix — it doesn't suppress anything else in the tree. */}
+      <footer className="border-t border-gray-200 bg-white px-6 py-3 text-center text-xs text-gray-400">
+        Over-Sat CRM &nbsp;·&nbsp; Version 1.0 MVP &nbsp;·&nbsp;{' '}
+        <span suppressHydrationWarning>
+          {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}
+        </span>
+      </footer>
 
     </div>
   )
