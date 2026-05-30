@@ -548,7 +548,6 @@ export function AddOpportunityModal({
         }}
         products={productsProp}
         managers={managersProp}
-        initialEditing
       />
     )
   }
@@ -732,9 +731,9 @@ export function AddOpportunityModal({
             </p>
           )}
 
-          {activeTab === 'contacts'  && (savedOpp ? <ContactsPanel  opportunityId={String(savedOpp.id)} /> : <LockedTab />)}
-          {activeTab === 'documents' && (savedOpp ? <DocumentsPanel opportunityId={String(savedOpp.id)} /> : <LockedTab />)}
-          {activeTab === 'notes'     && (savedOpp ? <NotesPanel     opportunityId={savedOpp.id}          /> : <LockedTab />)}
+          {activeTab === 'contacts'  && <LockedTab />}
+          {activeTab === 'documents' && <LockedTab />}
+          {activeTab === 'notes'     && <LockedTab />}
 
         </div>
       </div>

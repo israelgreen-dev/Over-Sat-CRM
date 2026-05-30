@@ -110,11 +110,13 @@ function DashboardAnalytics({
     [stageData],
   )
 
-  const barChartData = useMemo(
-    () => isHoS
-      ? managerRows.map((m) => ({ name: m.name, Target: m.target, Forecast: m.forecast, Win: m.closed }))
-      : stageData.map((s)   => ({ name: s.stage, Deals: s.count, Value: s.value })),
-    [isHoS, managerRows, stageData],
+  const hosBarData   = useMemo(
+    () => managerRows.map((m) => ({ name: m.name, Target: m.target, Forecast: m.forecast, Win: m.closed })),
+    [managerRows],
+  )
+  const stageBarData = useMemo(
+    () => stageData.map((s) => ({ name: s.stage, Deals: s.count, Value: s.value })),
+    [stageData],
   )
 
   return (
@@ -172,22 +174,22 @@ function DashboardAnalytics({
           </p>
           <ResponsiveContainer width="100%" height={230}>
             {isHoS ? (
-              <BarChart data={barChartData} barGap={4} barCategoryGap="28%">
+              <BarChart data={hosBarData} barGap={4} barCategoryGap="28%">
                 <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
                 <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#374151', fontWeight: 600 }} axisLine={false} tickLine={false} />
                 <YAxis tickFormatter={fmtShort} tick={{ fontSize: 11, fill: '#6b7280' }} axisLine={false} tickLine={false} width={52} />
-                <Tooltip formatter={(v: number) => fmtFull(v)} contentStyle={{ borderRadius: 8, fontSize: 12 }} />
+                <Tooltip formatter={(v) => fmtFull(Number(v))} contentStyle={{ borderRadius: 8, fontSize: 12 }} />
                 <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
                 <Bar dataKey="Target"   fill="#ef4444" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="Forecast" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="Win"      fill="#10b981" radius={[4, 4, 0, 0]} />
               </BarChart>
             ) : (
-              <BarChart data={barChartData} barCategoryGap="35%">
+              <BarChart data={stageBarData} barCategoryGap="35%">
                 <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
                 <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#374151', fontWeight: 600 }} axisLine={false} tickLine={false} />
                 <YAxis tickFormatter={fmtShort} tick={{ fontSize: 11, fill: '#6b7280' }} axisLine={false} tickLine={false} width={52} />
-                <Tooltip formatter={(v: number, name: string) => name === 'Value' ? fmtFull(v) : v} contentStyle={{ borderRadius: 8, fontSize: 12 }} />
+                <Tooltip formatter={(v, name) => name === 'Value' ? fmtFull(Number(v)) : v} contentStyle={{ borderRadius: 8, fontSize: 12 }} />
                 <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
                 <Bar dataKey="Value" fill={MANAGER_COLORS[viewAs] ?? '#3b82f6'} radius={[4, 4, 0, 0]} />
                 <Bar dataKey="Deals" fill="#e2e8f0" radius={[4, 4, 0, 0]} />
