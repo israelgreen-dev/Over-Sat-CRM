@@ -31,6 +31,22 @@ type Draft = {
   final_win_value: number | null
   loss_reason: string
   loss_description: string
+  probability: number | null
+}
+
+// Default probability by stage (used when probability is not explicitly set)
+export const DEFAULT_PROBABILITY: Record<string, number> = {
+  Discovery: 10, Proposal: 25, Negotiation: 60, Win: 100, Loss: 0,
+}
+
+export function effectiveProbability(o: Opportunity): number {
+  const p = (o as any).probability
+  if (p !== null && p !== undefined) return Number(p)
+  return DEFAULT_PROBABILITY[o.stage] ?? 0
+}
+
+export function weightedValue(o: Opportunity): number {
+  return ((o.value ?? 0) * effectiveProbability(o)) / 100
 }
 
 type Note = {
@@ -111,6 +127,11 @@ export function NumericInput({
   }
 
   const [display, setDisplay] = useState(() => toDisplay(value))
+  const [focused, setFocused] = useState(false)
+
+  useEffect(() => {
+    if (!focused) setDisplay(toDisplay(value))
+  }, [value, focused])
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const raw = e.target.value.replace(/[^0-9]/g, '')
@@ -132,6 +153,8 @@ export function NumericInput({
       placeholder={placeholder}
       value={display}
       onChange={handleChange}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
     />
   )
 }
@@ -173,13 +196,17 @@ export function Modal({
   const isWon   = draft.stage === 'Win'
   const canSave = !isLost || (draft.loss_reason.trim() !== '' && draft.loss_description.trim() !== '')
 
-  async function save() {
+  // Returns true on success, false on failure.
+  // Using a return value instead of reading saveError state avoids
+  // the stale-closure bug (state updates are async, the old value
+  // would be read before React re-renders).
+  async function save(): Promise<boolean> {
     setSaving(true)
     setSaveError(null)
 
     const finalWinValue = isWon ? (draft.final_win_value || draft.value) : null
 
-    const payload = {
+    const base = {
       name:              draft.name,
       customer_name:     draft.customer_name,
       owner:             draft.owner || null,
@@ -193,28 +220,33 @@ export function Modal({
       final_win_value:   finalWinValue,
       loss_reason:       isLost ? draft.loss_reason : null,
       loss_description:  isLost ? draft.loss_description : null,
+      probability:       draft.probability,
     }
 
-    let { error: sbError } = await supabase
-      .from('opportunities').update(payload).eq('id', opportunity.id)
+    // Progressive fallback: strip columns that don't exist in older DB schemas.
+    let payload: Record<string, unknown> = { ...base }
+    let sbError: { message: string } | null = null
 
-    if (sbError && sbError.message?.includes('final_win_value')) {
-      const { final_win_value, ...p } = payload
-      const { error: e2 } = await supabase.from('opportunities').update(p).eq('id', opportunity.id)
-      sbError = e2 ?? null
-    }
-    if (sbError && sbError.message?.includes('currency')) {
-      const { currency, ...p } = payload
-      const { error: e2 } = await supabase.from('opportunities').update(p).eq('id', opportunity.id)
-      sbError = e2 ?? null
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const { error } = await supabase.from('opportunities').update(payload).eq('id', opportunity.id)
+      sbError = error
+      if (!error) break
+      if (error.message?.includes('probability'))     { const { probability,     ...rest } = payload; payload = rest; continue }
+      if (error.message?.includes('final_win_value')) { const { final_win_value, ...rest } = payload; payload = rest; continue }
+      if (error.message?.includes('currency'))        { const { currency,        ...rest } = payload; payload = rest; continue }
+      break
     }
 
     setSaving(false)
-    if (sbError) { setSaveError(sbError.message); return }
+    if (sbError) { setSaveError(sbError.message); return false }
     onSaved({ ...opportunity, ...payload })
+    return true
   }
 
-  async function saveAndClose() { await save(); if (!saveError) onClose() }
+  async function saveAndClose() {
+    const ok = await save()
+    if (ok) onClose()
+  }
 
   const inputCls  = 'w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 focus:border-blue-400 focus:bg-white focus:outline-none transition-colors'
   const selectCls = inputCls
@@ -395,6 +427,28 @@ export function Modal({
                   <NumericInput className={inputCls} value={draft.value} onChange={(v) => setDraft((d) => ({ ...d, value: v }))} />
                 </Field>
 
+                <Field label="Probability %">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      className={`${inputCls} w-24`}
+                      placeholder={String(DEFAULT_PROBABILITY[draft.stage] ?? 0)}
+                      value={draft.probability ?? ''}
+                      onChange={(e) => {
+                        const v = e.target.value === '' ? null : Math.min(100, Math.max(0, Number(e.target.value)))
+                        setDraft((d) => ({ ...d, probability: v }))
+                      }}
+                    />
+                    <span className="text-xs text-gray-400">
+                      {draft.probability === null
+                        ? `Default: ${DEFAULT_PROBABILITY[draft.stage] ?? 0}% (by stage)`
+                        : `Weighted: ${draft.value ? `$${Math.round((draft.value * (draft.probability ?? 0)) / 100).toLocaleString()}` : '—'}`}
+                    </span>
+                  </div>
+                </Field>
+
                 {isWon && (
                   <Field label="Win Value">
                     <NumericInput
@@ -464,7 +518,7 @@ export function AddOpportunityModal({
   const [form, setForm] = useState({
     name: '', customer_name: '', country: '', owner: defaultOwner,
     stage: 'Discovery', product: '', status: 'On Track', close_date: '', value: '',
-    currency: 'USD',
+    currency: 'USD', probability: null as number | null,
   })
   const [saving, setSaving]   = useState(false)
   const [error, setError]     = useState<string | null>(null)
@@ -480,27 +534,37 @@ export function AddOpportunityModal({
   async function handleSubmit() {
     setSaving(true)
     setError(null)
-    const payload = {
-      name: form.name.trim(),
-      customer_name: form.customer_name.trim(),
-      owner: form.owner || null,
-      stage: form.stage,
-      product: form.product || null,
-      status: form.status || null,
-      country: form.country || null,
-      currency: form.currency || 'USD',
-      close_date: form.close_date || null,
-      value: form.value === '' ? null : Number(form.value),
-      loss_reason: null,
+
+    const base = {
+      name:             form.name.trim(),
+      customer_name:    form.customer_name.trim(),
+      owner:            form.owner || null,
+      stage:            form.stage,
+      product:          form.product || null,
+      status:           form.status || null,
+      country:          form.country || null,
+      currency:         form.currency || 'USD',
+      close_date:       form.close_date || null,
+      value:            form.value === '' ? null : Number(form.value),
+      probability:      form.probability,
+      loss_reason:      null,
       loss_description: null,
     }
-    let { data, error: sbError } = await supabase.from('opportunities').insert([payload]).select()
 
-    // If the DB doesn't have a currency column yet, retry without it
-    if (sbError && sbError.message?.includes('currency')) {
-      const { currency, ...payloadWithout } = payload
-      const { data: data2, error: sbError2 } = await supabase.from('opportunities').insert([payloadWithout]).select()
-      data = data2; sbError = sbError2 ?? null
+    // Progressive fallback: strip columns that don't exist in older DB schemas.
+    let payload: Record<string, unknown> = { ...base }
+    let data: any[] | null = null
+    let sbError: { message: string } | null = null
+
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const res = await supabase.from('opportunities').insert([payload]).select()
+      data = res.data; sbError = res.error
+      if (!res.error) break
+      // Strip unsupported columns one at a time and retry.
+      // Note: final_win_value is not sent on INSERT so that branch is omitted here.
+      if (res.error.message?.includes('probability')) { const { probability, ...rest } = payload; payload = rest; continue }
+      if (res.error.message?.includes('currency'))    { const { currency,    ...rest } = payload; payload = rest; continue }
+      break
     }
 
     setSaving(false)
@@ -721,6 +785,24 @@ export function AddOpportunityModal({
                   value={form.value === '' ? null : Number(form.value)}
                   onChange={(v) => setForm((f) => ({ ...f, value: v == null ? '' : String(v) }))} />
               </Field>
+
+              <Field label="Probability %">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number" min="0" max="100"
+                    className={`${inputCls} w-24`}
+                    placeholder={String(DEFAULT_PROBABILITY[form.stage] ?? 0)}
+                    value={form.probability ?? ''}
+                    onChange={(e) => {
+                      const v = e.target.value === '' ? null : Math.min(100, Math.max(0, Number(e.target.value)))
+                      setForm((f) => ({ ...f, probability: v }))
+                    }}
+                  />
+                  <span className="text-xs text-gray-400">
+                    Default: {DEFAULT_PROBABILITY[form.stage] ?? 0}% by stage
+                  </span>
+                </div>
+              </Field>
             </div>
           )}
 
@@ -756,6 +838,7 @@ function toDraft(opp: Opportunity): Draft {
     final_win_value: opp.stage === 'Win' ? ((opp as any).final_win_value || opp.value || null) : ((opp as any).final_win_value ?? null),
     loss_reason: opp.loss_reason ?? '',
     loss_description: opp.loss_description ?? '',
+    probability: (opp as any).probability ?? null,
   }
 }
 

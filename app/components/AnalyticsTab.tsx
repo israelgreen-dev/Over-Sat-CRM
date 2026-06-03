@@ -3,9 +3,8 @@
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell, Legend,
-  FunnelChart, Funnel, LabelList,
 } from 'recharts'
-import { type Opportunity } from './OpportunitiesTable'
+import { type Opportunity, effectiveProbability } from './OpportunitiesTable'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmtShort(n: number) {
@@ -90,10 +89,16 @@ export default function AnalyticsTab({
   })
   const maxStageVal = Math.max(...stageData.map((d) => d.value), 1)
 
-  // Funnel
-  const funnelData = ['Discovery', 'Proposal', 'Negotiation', 'Win'].map((stage) => ({
-    name: stage, value: opps.filter((o) => o.stage === stage).length, fill: STAGE_COLORS[stage],
-  }))
+  // Weighted pipeline
+  const weightedPipeline = active.reduce((s, o) => s + (pipeVal(o) * effectiveProbability(o)) / 100, 0)
+
+  // Funnel (by value)
+  const funnelStages = ['Discovery', 'Proposal', 'Negotiation', 'Win']
+  const funnelData = funnelStages.map((stage) => {
+    const s    = opps.filter((o) => o.stage === stage)
+    const val  = stage === 'Win' ? s.reduce((a, o) => a + winVal(o), 0) : s.reduce((a, o) => a + pipeVal(o), 0)
+    return { stage, count: s.length, value: val, fill: STAGE_COLORS[stage] }
+  })
 
   // Loss reasons
   const lossMap: Record<string, number> = {}
@@ -161,11 +166,12 @@ export default function AnalyticsTab({
 
       {/* ── Executive Summary ─────────────────────────────────────────────── */}
       <Section title="Executive Summary" subtitle={`${opps.length} opportunities in ${selectedYear}`}>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <KPI label="Overall Target"   value={fmtShort(overallTarget)}  sub="annual team quota" />
-          <KPI label="Total Win"        value={fmtShort(totalWin)}        sub={`${wins.length} deals`}   color="text-green-600" bg="bg-green-50" />
-          <KPI label="Achievement"      value={`${achievementPct}%`}      sub="Win vs Target"    color={achievementPct >= 100 ? 'text-green-600' : achievementPct >= 70 ? 'text-amber-500' : 'text-red-500'} />
-          <KPI label="Gap to Target"    value={fmtShort(Math.abs(overallTarget - totalWin))} sub={overallTarget - totalWin <= 0 ? 'Target exceeded ✓' : 'remaining'} color={overallTarget - totalWin <= 0 ? 'text-green-600' : 'text-red-500'} />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <KPI label="Overall Target"    value={fmtShort(overallTarget)}    sub="annual team quota" />
+          <KPI label="Total Win"         value={fmtShort(totalWin)}          sub={`${wins.length} deals`}   color="text-green-600" bg="bg-green-50" />
+          <KPI label="Achievement"       value={`${achievementPct}%`}        sub="Win vs Target"    color={achievementPct >= 100 ? 'text-green-600' : achievementPct >= 70 ? 'text-amber-500' : 'text-red-500'} />
+          <KPI label="Open Pipeline"     value={fmtShort(totalPipeline)}     sub={`${active.length} active`} color="text-blue-600" bg="bg-blue-50" />
+          <KPI label="Weighted Pipeline" value={fmtShort(weightedPipeline)}  sub="prob-adjusted"    color="text-indigo-600" bg="bg-indigo-50" />
         </div>
         <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <KPI label="Open Pipeline"    value={fmtShort(totalPipeline)}  sub={`${active.length} active deals`} />
@@ -223,17 +229,8 @@ export default function AnalyticsTab({
           )}
         </Section>
 
-        <Section title="Sales Funnel" subtitle="Active deals count per stage">
-          {opps.length === 0 ? <Empty /> : (
-            <ResponsiveContainer width="100%" height={240}>
-              <FunnelChart>
-                <Tooltip formatter={(v) => [`${v} deals`]} />
-                <Funnel dataKey="value" data={funnelData} isAnimationActive>
-                  <LabelList position="center" fill="#fff" stroke="none" dataKey="name" style={{ fontSize: 12, fontWeight: 600 }} />
-                </Funnel>
-              </FunnelChart>
-            </ResponsiveContainer>
-          )}
+        <Section title="Sales Funnel" subtitle="Pipeline value and deal count per stage">
+          {opps.length === 0 ? <Empty /> : <SalesFunnel data={funnelData} />}
         </Section>
       </div>
 
@@ -430,6 +427,70 @@ export default function AnalyticsTab({
         )}
       </Section>
 
+    </div>
+  )
+}
+
+// ── Sales Funnel as Pie Chart ─────────────────────────────────────────────────
+function SalesFunnel({
+  data,
+}: {
+  data: { stage: string; count: number; value: number; fill: string }[]
+}) {
+  const total = data.reduce((s, d) => s + d.count, 0)
+
+  const renderLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, name, count }: any) => {
+    if (count === 0) return null
+    const RADIAN  = Math.PI / 180
+    const radius  = innerRadius + (outerRadius - innerRadius) * 0.5
+    const x       = cx + radius * Math.cos(-midAngle * RADIAN)
+    const y       = cy + radius * Math.sin(-midAngle * RADIAN)
+    return (
+      <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={12} fontWeight={600}>
+        {name}
+      </text>
+    )
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
+      {/* Pie */}
+      <div className="h-56 w-full sm:w-72 shrink-0">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={data}
+              cx="50%"
+              cy="50%"
+              outerRadius={100}
+              dataKey="count"
+              nameKey="stage"
+              labelLine={false}
+              label={renderLabel}
+            >
+              {data.map((d) => <Cell key={d.stage} fill={d.fill} />)}
+            </Pie>
+            <Tooltip
+              formatter={(v: any, name: any) => [`${v} deals`, name]}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Legend + stats */}
+      <div className="flex-1 space-y-2">
+        {data.map((d) => (
+          <div key={d.stage} className="flex items-center gap-3 rounded-xl bg-gray-50 px-4 py-2.5">
+            <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: d.fill }} />
+            <span className="w-24 text-sm font-semibold text-gray-800">{d.stage}</span>
+            <span className="text-sm text-gray-600">{d.count} deal{d.count !== 1 ? 's' : ''}</span>
+            <span className="ml-auto text-sm font-semibold text-gray-900">{fmtShort(d.value)}</span>
+            <span className="w-10 text-right text-xs text-gray-400">
+              {total > 0 ? `${Math.round((d.count / total) * 100)}%` : '—'}
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

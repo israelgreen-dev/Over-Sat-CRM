@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { type Opportunity, Modal, AddOpportunityModal } from './OpportunitiesTable'
+import { type Opportunity, Modal, AddOpportunityModal, effectiveProbability, weightedValue } from './OpportunitiesTable'
 import { fmtUSD } from '@/lib/currency'
 
 const STAGE_COLORS: Record<string, string> = {
@@ -21,6 +21,8 @@ const COLUMNS: { label: string; field: string; numeric?: boolean }[] = [
   { label: 'Sales Manager',  field: 'owner' },
   { label: 'Product',        field: 'product' },
   { label: 'Value',          field: 'value',       numeric: true },
+  { label: 'Prob %',         field: 'probability', numeric: true },
+  { label: 'Weighted Value', field: '_weighted',   numeric: true },
   { label: 'Stage',          field: 'stage' },
   { label: 'Close Date',     field: 'close_date' },
   { label: 'Status',         field: 'status' },
@@ -324,6 +326,17 @@ export default function PipelineTab({
                   {/* Value */}
                   <td className="whitespace-nowrap px-4 py-3 font-semibold tabular-nums text-gray-900">
                     {opp.value != null ? fmtUSD(opp.value, (opp as any).currency) : '—'}
+                  </td>
+                  {/* Probability */}
+                  <td className="whitespace-nowrap px-4 py-3 text-center tabular-nums text-blue-600 font-medium">
+                    {effectiveProbability(opp)}%
+                    {(opp as any).probability == null && (
+                      <span className="ml-1 text-[10px] text-gray-400">(def)</span>
+                    )}
+                  </td>
+                  {/* Weighted Value */}
+                  <td className="whitespace-nowrap px-4 py-3 font-semibold tabular-nums text-indigo-600">
+                    {opp.value != null ? fmtUSD(weightedValue(opp), (opp as any).currency) : '—'}
                   </td>
                   {/* Stage */}
                   <td className="px-4 py-3">

@@ -24,3 +24,97 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* ── Print styles ─────────────────────────────────────────────────────────── */
+@media print {
+  /* Force color rendering for backgrounds and colored text */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide all UI chrome */
+  .no-print {
+    display: none !important;
+  }
+
+  /* Remove page chrome */
+  body {
+    background: white !important;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Unwrap the sticky containers so content flows naturally */
+  header,
+  nav {
+    position: static !important;
+  }
+
+  /* Give the main content room and remove padding */
+  main {
+    padding: 0 !important;
+    max-width: 100% !important;
+  }
+
+  /* Show the print-only header */
+  .print-only {
+    display: block !important;
+  }
+
+  /* Clean up cards — keep borders, drop heavy shadows */
+  .shadow-sm,
+  .shadow-lg,
+  .shadow-xl {
+    box-shadow: none !important;
+  }
+
+  /* Prevent cards/tables from breaking mid-element across pages */
+  .rounded-2xl,
+  tr,
+  td {
+    break-inside: avoid;
+  }
+
+  /* Tables should be full-width */
+  table {
+    width: 100% !important;
+  }
+
+  /* Remove sticky positioning from any element that uses it */
+  [class*="sticky"] {
+    position: static !important;
+  }
+
+  /* Drop overflow hidden so table content isn't clipped */
+  [class*="overflow"] {
+    overflow: visible !important;
+  }
+
+  /* Hide floating dropdowns / popovers by their specific utility combinations.
+     Avoid [class*="absolute"] — it's too broad and hides legitimate content. */
+  [class*="z-50"],
+  [class*="z-40"] {
+    display: none !important;
+  }
+
+  /* Page margins + page numbers in bottom-right margin */
+  @page {
+    margin: 1.5cm 1.2cm 2cm 1.2cm;
+    size: A4 landscape;
+
+    @bottom-right {
+      content: "Page " counter(page) " of " counter(pages);
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 9pt;
+      color: #6b7280;
+    }
+
+    @bottom-left {
+      content: "Over-Sat CRM — Confidential";
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 9pt;
+      color: #9ca3af;
+    }
+  }
+}

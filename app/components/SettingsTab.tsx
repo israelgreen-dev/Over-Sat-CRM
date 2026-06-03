@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { NumericInput } from './OpportunitiesTable'
 
 export default function SettingsTab({
   managers,
@@ -12,11 +11,6 @@ export default function SettingsTab({
   onProductsChange,
   onHeadOfSalesChange,
   onPartnersChange,
-  managerTargets,
-  onManagerTargetsChange,
-  selectedYear,
-  availableYears,
-  onCopyTargetsToYear,
 }: {
   managers: string[]
   products: string[]
@@ -26,18 +20,22 @@ export default function SettingsTab({
   onProductsChange: (v: string[]) => void
   onHeadOfSalesChange: (v: string) => void
   onPartnersChange: (v: string[]) => void
-  managerTargets: Record<string, number>
-  onManagerTargetsChange: (v: Record<string, number>) => void
-  selectedYear: string
-  availableYears: string[]
-  onCopyTargetsToYear: (toYear: string) => void
 }) {
+  const [hosEditing, setHosEditing] = useState(false)
+  const [hosVal, setHosVal]         = useState(headOfSales)
+
+  function commitHos() {
+    const v = hosVal.trim()
+    onHeadOfSalesChange(v)
+    setHosEditing(false)
+  }
+
   return (
     <div className="space-y-8">
       <div>
         <h2 className="text-base font-bold text-gray-900">Settings</h2>
         <p className="mt-0.5 text-sm text-gray-400">
-          Manage dropdown values and targets. Changes apply immediately.
+          Manage lists and roles. Targets are managed in the Targets tab.
         </p>
       </div>
 
@@ -47,29 +45,40 @@ export default function SettingsTab({
           <span className="h-2.5 w-2.5 rounded-full bg-slate-600" />
           <h3 className="text-sm font-bold text-gray-900">Head of Sales</h3>
         </div>
-        <p className="mb-4 text-xs text-gray-400">
-          This manager sees all pipeline data and aggregated analytics across every rep.
+        <p className="mb-3 text-xs text-gray-400">
+          Sees all pipeline data and aggregated analytics. Not counted as a sales team member.
         </p>
-        <select
-          className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-900 focus:border-blue-400 focus:bg-white focus:outline-none transition-colors"
-          value={headOfSales}
-          onChange={(e) => onHeadOfSalesChange(e.target.value)}
-        >
-          {managers.map((m) => (
-            <option key={m} value={m}>{m}</option>
-          ))}
-        </select>
+        <div className="flex items-center gap-2 rounded-xl bg-gray-50 px-3 py-2">
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-600 text-xs font-bold text-white">1</span>
+          {hosEditing ? (
+            <>
+              <input
+                autoFocus
+                className="flex-1 rounded-lg border border-blue-300 bg-white px-2 py-1 text-sm text-gray-900 focus:outline-none"
+                value={hosVal}
+                onChange={(e) => setHosVal(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') commitHos(); if (e.key === 'Escape') setHosEditing(false) }}
+              />
+              <button onClick={commitHos} className="rounded-lg p-1 text-green-500 hover:bg-green-50 transition-colors" title="Save">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+              </button>
+              <button onClick={() => setHosEditing(false)} className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 transition-colors" title="Cancel">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="flex-1 text-sm font-medium text-gray-900">{headOfSales || <span className="text-gray-400">Not set</span>}</span>
+              <button onClick={() => { setHosVal(headOfSales); setHosEditing(true) }} className="rounded-lg p-1 text-gray-300 hover:bg-blue-50 hover:text-blue-500 transition-colors" title="Edit">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 012.828 2.828L11.828 15.828a2 2 0 01-1.414.586H8v-2.414a2 2 0 01.586-1.414z" /></svg>
+              </button>
+              <button onClick={() => { onHeadOfSalesChange(''); setHosVal('') }} className="rounded-lg p-1 text-gray-300 hover:bg-red-50 hover:text-red-500 transition-colors" title="Clear">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </>
+          )}
+        </div>
       </div>
-
-      {/* ── Targets ────────────────────────────────────────────────────────── */}
-      <TargetsEditor
-        managers={managers}
-        managerTargets={managerTargets}
-        onManagerTargetsChange={onManagerTargetsChange}
-        selectedYear={selectedYear}
-        availableYears={availableYears}
-        onCopyTargetsToYear={onCopyTargetsToYear}
-      />
 
       {/* ── Lists ──────────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
@@ -97,99 +106,6 @@ export default function SettingsTab({
           placeholder="e.g. Acme Corp"
           accent="#10b981"
         />
-      </div>
-    </div>
-  )
-}
-
-function TargetsEditor({
-  managers,
-  managerTargets,
-  onManagerTargetsChange,
-  selectedYear,
-  availableYears,
-  onCopyTargetsToYear,
-}: {
-  managers: string[]
-  managerTargets: Record<string, number>
-  onManagerTargetsChange: (v: Record<string, number>) => void
-  selectedYear: string
-  availableYears: string[]
-  onCopyTargetsToYear: (toYear: string) => void
-}) {
-  const [copyTo, setCopyTo] = useState('')
-  const overallTarget = Object.values(managerTargets).reduce((s, v) => s + v, 0)
-  const otherYears = availableYears.filter((y) => y !== selectedYear)
-
-  function handleManager(name: string, n: number | null) {
-    onManagerTargetsChange({ ...managerTargets, [name]: n ?? 0 })
-  }
-
-  const inputCls = 'w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-900 focus:border-blue-400 focus:bg-white focus:outline-none transition-colors'
-
-  return (
-    <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-      <div className="mb-1 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
-          <h3 className="text-sm font-bold text-gray-900">Targets (USD) — {selectedYear}</h3>
-        </div>
-        {otherYears.length > 0 && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400">Copy to</span>
-            <select
-              className="rounded-lg border border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-700 focus:outline-none"
-              value={copyTo}
-              onChange={(e) => setCopyTo(e.target.value)}
-            >
-              <option value="">Select year…</option>
-              {otherYears.map((y) => <option key={y} value={y}>{y}</option>)}
-            </select>
-            <button
-              disabled={!copyTo}
-              onClick={() => { if (copyTo) { onCopyTargetsToYear(copyTo); setCopyTo('') } }}
-              className="rounded-lg bg-amber-500 px-3 py-1 text-xs font-semibold text-white hover:bg-amber-400 disabled:opacity-40"
-            >
-              Copy
-            </button>
-          </div>
-        )}
-      </div>
-      <p className="mb-5 text-xs text-gray-400">
-        Set annual quotas for {selectedYear}. Use Copy to duplicate them to another year.
-      </p>
-
-      {/* Overall target — derived from sum of manager quotas */}
-      <div className="mb-5">
-        <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-500">
-          Overall Target
-        </label>
-        <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
-          <span className="text-sm font-medium text-gray-900">
-            {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(overallTarget)}
-          </span>
-          <span className="text-xs text-gray-400">Auto — sum of manager quotas</span>
-        </div>
-      </div>
-
-      {/* Per-manager targets */}
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
-        Per-Manager Quotas
-      </p>
-      <div className="space-y-2">
-        {managers.map((name) => (
-          <div key={name} className="flex items-center gap-3">
-            <span className="w-20 shrink-0 text-sm font-medium text-gray-700">{name}</span>
-            <NumericInput
-              className={inputCls}
-              value={managerTargets[name] ?? 0}
-              onChange={(v) => handleManager(name, v)}
-            />
-          </div>
-        ))}
-        {managers.length === 0 && (
-          <p className="text-xs text-gray-400">Add managers first to set individual quotas.</p>
-        )}
       </div>
     </div>
   )

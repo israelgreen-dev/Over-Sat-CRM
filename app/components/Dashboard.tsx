@@ -9,8 +9,12 @@ import ManagersTab from './ManagersTab'
 import PipelineTab from './PipelineTab'
 import SettingsTab from './SettingsTab'
 import AnalyticsTab from './AnalyticsTab'
+import TargetsTab, { type QuarterlyData, type ProductTargetRow } from './TargetsTab'
+import UsersTab from './UsersTab'
+import ErrorBoundary from './ErrorBoundary'
 import LoginScreen from './LoginScreen'
 import SetupScreen from './SetupScreen'
+import { loadSettings, saveSettings } from '@/lib/settings'
 
 // ── Module-level constants ─────────────────────────────────────────────────────
 // CURRENT_YEAR is evaluated once at module load — never changes within a session,
@@ -21,7 +25,7 @@ const DEFAULT_PRODUCTS = ['Python5', 'Python7', 'Mantis10', 'Rigel', 'Griffin', 
 const COLOR_PALETTE    = ['#3b82f6','#10b981','#f59e0b','#8b5cf6','#ef4444','#06b6d4','#f97316','#ec4899','#84cc16','#6366f1']
 const CURRENT_YEAR     = String(new Date().getFullYear())
 
-type Tab = 'Dashboard' | 'Sales Managers' | 'My Performance' | 'Pipeline' | 'Analytics' | 'Settings'
+type Tab = 'Dashboard' | 'Sales Managers' | 'My Performance' | 'Pipeline' | 'Analytics' | 'Targets' | 'Settings'
 
 type UserProfile = {
   id: string
@@ -127,6 +131,12 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
     [CURRENT_YEAR]: { ...MANAGER_TARGETS },
   })
 
+  // ── Per-year quarterly targets ────────────────────────────────────────────
+  const [quarterlyTargetsByYear, setQuarterlyTargetsByYear] = useState<Record<string, Record<string, QuarterlyData>>>({})
+
+  // ── Per-year, per-manager product target rows ─────────────────────────────
+  const [productTargetRowsByYear, setProductTargetRowsByYear] = useState<Record<string, Record<string, ProductTargetRow[]>>>({})
+
   // Stable reference: only creates a new object when selectedYear or targetsByYear changes.
   const managerTargets = useMemo(
     () => targetsByYear[selectedYear] ?? {},
@@ -139,52 +149,80 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
     [selectedYear],
   )
 
-  // ── Load settings from localStorage after hydration ───────────────────────
+  // ── Load settings — Supabase first, localStorage fallback ────────────────
   const [settingsLoaded, setSettingsLoaded] = useState(false)
 
   useEffect(() => {
-    try {
-      const m = localStorage.getItem('oversat_crm_managers')
-      if (m) setManagers(JSON.parse(m))
-      const p = localStorage.getItem('oversat_crm_products')
-      if (p) setProducts(JSON.parse(p))
-      const h = localStorage.getItem('oversat_crm_head_of_sales')
-      if (h) setHeadOfSales(h)
-      const pa = localStorage.getItem('oversat_crm_partners')
-      if (pa) setPartners(JSON.parse(pa))
-      const tby = localStorage.getItem('oversat_crm_targets_by_year')
-      if (tby) setTargetsByYear(JSON.parse(tby))
+    loadSettings().then((s) => {
+      if (s.managers)                setManagers(s.managers)
+      if (s.products)                setProducts(s.products)
+      if (s.headOfSales !== undefined) setHeadOfSales(s.headOfSales)
+      if (s.partners)                setPartners(s.partners)
+      if (s.targetsByYear)           setTargetsByYear(s.targetsByYear)
       else {
-        const t = localStorage.getItem('oversat_crm_manager_targets')
-        if (t) setTargetsByYear({ [CURRENT_YEAR]: JSON.parse(t) })
+        // Legacy migration: v1 stored targets under a different key
+        try {
+          const t = localStorage.getItem('oversat_crm_manager_targets')
+          if (t) setTargetsByYear({ [CURRENT_YEAR]: JSON.parse(t) })
+        } catch {}
       }
-    } catch {}
-    setSettingsLoaded(true)
+      if (s.quarterlyTargetsByYear)  setQuarterlyTargetsByYear(s.quarterlyTargetsByYear)
+      if (s.productTargetRowsByYear) setProductTargetRowsByYear(s.productTargetRowsByYear)
+      setSettingsLoaded(true)
+    })
   }, [])
 
-  // ── Persist settings ──────────────────────────────────────────────────────
-  useEffect(() => { if (settingsLoaded) localStorage.setItem('oversat_crm_managers',         JSON.stringify(managers))      }, [managers,      settingsLoaded])
-  useEffect(() => { if (settingsLoaded) localStorage.setItem('oversat_crm_products',          JSON.stringify(products))      }, [products,      settingsLoaded])
-  useEffect(() => { if (settingsLoaded) localStorage.setItem('oversat_crm_head_of_sales',     headOfSales)                   }, [headOfSales,   settingsLoaded])
-  useEffect(() => { if (settingsLoaded) localStorage.setItem('oversat_crm_partners',          JSON.stringify(partners))      }, [partners,      settingsLoaded])
-  useEffect(() => { if (settingsLoaded) localStorage.setItem('oversat_crm_targets_by_year',   JSON.stringify(targetsByYear)) }, [targetsByYear, settingsLoaded])
+  // ── Persist settings — localStorage (instant) + Supabase (background) ────
+  useEffect(() => {
+    if (!settingsLoaded) return
+    saveSettings({
+      managers,
+      products,
+      headOfSales,
+      partners,
+      targetsByYear,
+      quarterlyTargetsByYear,
+      productTargetRowsByYear,
+    })
+  }, [settingsLoaded, managers, products, headOfSales, partners, targetsByYear, quarterlyTargetsByYear, productTargetRowsByYear])
 
   const overallTarget = useMemo(
     () => Object.values(managerTargets).reduce((s, v) => s + v, 0),
     [managerTargets],
   )
 
-  // ── All unique managers ───────────────────────────────────────────────────
-  // Combines the Settings list with any opportunity owner not already in it.
+  // ── Quarterly targets for selected year ──────────────────────────────────
+  const quarterlyTargets = useMemo(
+    () => quarterlyTargetsByYear[selectedYear] ?? {},
+    [quarterlyTargetsByYear, selectedYear],
+  )
+  const setQuarterlyTargets = useCallback(
+    (v: Record<string, QuarterlyData>) =>
+      setQuarterlyTargetsByYear((prev) => ({ ...prev, [selectedYear]: v })),
+    [selectedYear],
+  )
+
+  const productTargetRowsByManager = useMemo(
+    () => productTargetRowsByYear[selectedYear] ?? {},
+    [productTargetRowsByYear, selectedYear],
+  )
+  const setProductTargetRowsByManager = useCallback(
+    (v: Record<string, ProductTargetRow[]>) =>
+      setProductTargetRowsByYear((prev) => ({ ...prev, [selectedYear]: v })),
+    [selectedYear],
+  )
+
+  // ── All unique managers (HoS excluded — separate role) ────────────────────
   const allManagers = useMemo(() => {
     const managersLower = managers.map((n) => n.toLowerCase())
     const extra = Array.from(new Set(
       liveOpps
         .map((o) => (o.owner as string) ?? '')
-        .filter((owner) => owner && !managersLower.includes(owner.toLowerCase())),
+        .filter((owner) => owner && !managersLower.includes(owner.toLowerCase()) && owner.toLowerCase() !== headOfSales.toLowerCase()),
     ))
-    return [...managers, ...extra]
-  }, [managers, liveOpps])
+    // Exclude HoS from the sales team list
+    return [...managers.filter((m) => m.toLowerCase() !== headOfSales.toLowerCase()), ...extra]
+  }, [managers, liveOpps, headOfSales])
 
   // ── Available years ───────────────────────────────────────────────────────
   const availableYears = useMemo(() => {
@@ -215,7 +253,7 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
 
   const tabs = useMemo<Tab[]>(
     () => isHoS
-      ? ['Dashboard', 'Sales Managers', 'Pipeline', 'Analytics', 'Settings']
+      ? ['Dashboard', 'Sales Managers', 'Pipeline', 'Analytics', 'Targets', 'Settings']
       : isPartner
       ? ['Dashboard', 'Sales Managers', 'Pipeline', 'Analytics']
       : ['Dashboard', 'My Performance', 'Pipeline', 'Analytics'],
@@ -292,10 +330,27 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
   if (!profile.role) return <SetupScreen email={profile.email} />
 
   return (
+    <ErrorBoundary>
     <div className="min-h-screen bg-gray-100 font-sans">
 
+      {/* ── Print-only title ────────────────────────────────────────────────── */}
+      <div className="print-only hidden border-b-2 border-gray-200 pb-4 mb-5 px-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <img src="/OS-Logo.png" alt="Over-Sat Logo" style={{ height: 40, width: 'auto', objectFit: 'contain' }} />
+            <div className="border-l border-gray-300 pl-4">
+              <h1 className="text-xl font-bold text-gray-900">{safeTab}</h1>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {isHoS ? `Full Access — ${headOfSales}` : `View — ${viewAs}`} &nbsp;·&nbsp; Year: {selectedYear}
+              </p>
+            </div>
+          </div>
+          <p className="text-xs text-gray-400">{new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+        </div>
+      </div>
+
       {/* ── Top Header ──────────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-40 border-b border-gray-200 bg-white shadow-sm">
+      <header className="no-print sticky top-0 z-40 border-b border-gray-200 bg-white shadow-sm">
         <div className="mx-auto flex max-w-screen-xl items-center justify-between px-5 py-3">
 
           {/* Logo + title — no white container needed on white header */}
@@ -439,7 +494,7 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
       </header>
 
       {/* ── Pill Navigation ─────────────────────────────────────────────────── */}
-      <div className="sticky top-[68px] z-30 border-b border-gray-200 bg-white shadow-sm">
+      <div className="no-print sticky top-[68px] z-30 border-b border-gray-200 bg-white shadow-sm">
         <div className="mx-auto flex max-w-screen-xl items-center gap-4 px-6 py-3">
           <div className="inline-flex gap-1 rounded-2xl border border-gray-200 bg-gray-100 p-1">
             {tabs.map((tab) => (
@@ -553,24 +608,48 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
           </div>
         )}
 
-        {safeTab === 'Settings' && isHoS && (
-          <SettingsTab
-            managers={managers}
-            products={products}
-            headOfSales={headOfSales}
-            partners={partners}
-            onManagersChange={handleManagersChange}
-            onProductsChange={setProducts}
-            onHeadOfSalesChange={setHeadOfSales}
-            onPartnersChange={setPartners}
+        {safeTab === 'Targets' && isHoS && (
+          <TargetsTab
+            managers={managers.filter((m) => m.toLowerCase() !== headOfSales.toLowerCase())}
             managerTargets={managerTargets}
             onManagerTargetsChange={setManagerTargets}
+            quarterlyTargets={quarterlyTargets}
+            onQuarterlyTargetsChange={setQuarterlyTargets}
             selectedYear={selectedYear}
             availableYears={availableYears}
             onCopyTargetsToYear={(toYear) =>
               setTargetsByYear((prev) => ({ ...prev, [toYear]: { ...(prev[selectedYear] ?? {}) } }))
             }
+            products={products}
+            productTargetRowsByManager={productTargetRowsByManager}
+            onProductTargetRowsByManagerChange={setProductTargetRowsByManager}
           />
+        )}
+
+        {safeTab === 'Settings' && isHoS && (
+          <div className="space-y-10">
+            <SettingsTab
+              managers={managers}
+              products={products}
+              headOfSales={headOfSales}
+              partners={partners}
+              onManagersChange={handleManagersChange}
+              onProductsChange={setProducts}
+              onHeadOfSalesChange={setHeadOfSales}
+              onPartnersChange={setPartners}
+            />
+            {/* ── User & Password Management ───────────────────────────── */}
+            <div>
+              <div className="mb-4">
+                <h2 className="text-base font-bold text-gray-900">User Management</h2>
+                <p className="mt-0.5 text-sm text-gray-400">
+                  Create and manage CRM user accounts, roles, and passwords.
+                  <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-semibold text-purple-700">Admin only</span>
+                </p>
+              </div>
+              <UsersTab currentUserId={profile?.id ?? ''} />
+            </div>
+          </div>
         )}
 
         {safeTab === 'Analytics' && (
@@ -598,6 +677,7 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
       </footer>
 
     </div>
+    </ErrorBoundary>
   )
 }
 
