@@ -52,6 +52,7 @@ export default function ManagerDocuments({
   const [error, setError]         = useState<string | null>(null)
   const [deleting, setDeleting]   = useState<string | null>(null)
   const fileRef                   = useRef<HTMLInputElement>(null)
+  const noteRef                   = useRef<string>('')
 
   async function load() {
     setLoading(true)
@@ -71,17 +72,19 @@ export default function ManagerDocuments({
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+    const currentNote = noteRef.current.trim()
     setUploading(true)
     setError(null)
     try {
       const form = new FormData()
       form.append('file',        file)
       form.append('manager',     managerName)
-      form.append('note',        note.trim())
+      form.append('note',        currentNote)
       form.append('uploaded_by', uploaderName)
       const res = await fetch('/api/manager-docs', { method: 'POST', body: form })
       if (!res.ok) { const d = await res.json(); throw new Error(d.error ?? 'Upload failed') }
       setNote('')
+      noteRef.current = ''
       if (fileRef.current) fileRef.current.value = ''
       await load()
     } catch (err: any) {
@@ -134,7 +137,7 @@ export default function ManagerDocuments({
               <input
                 type="text"
                 value={note}
-                onChange={(e) => setNote(e.target.value)}
+                onChange={(e) => { setNote(e.target.value); noteRef.current = e.target.value }}
                 onKeyDown={(e) => { if (e.key === 'Escape') setNote('') }}
                 placeholder="Add a note for this document…"
                 className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-400 focus:bg-white focus:outline-none transition-colors"
