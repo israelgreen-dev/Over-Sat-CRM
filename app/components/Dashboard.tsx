@@ -575,6 +575,7 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
             managerTargets={managerTargets}
             managers={managers}
             managerColors={managerColors}
+            uploaderName={profile?.name ?? ''}
           />
         )}
 

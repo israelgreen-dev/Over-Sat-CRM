@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { type Opportunity } from './OpportunitiesTable'
 import { MANAGER_TARGETS, MANAGER_COLORS } from './DashboardAnalytics'
+import ManagerDocuments from './ManagerDocuments'
 
 const MANAGERS = Object.keys(MANAGER_TARGETS)
 
@@ -31,11 +32,13 @@ export default function ManagersTab({
   managerTargets = MANAGER_TARGETS,
   managers: managerNames = MANAGERS,
   managerColors: managerColorsProp = MANAGER_COLORS,
+  uploaderName = '',
 }: {
   opportunities: Opportunity[]
   managerTargets?: Record<string, number>
   managers?: string[]
   managerColors?: Record<string, string>
+  uploaderName?: string
 }) {
   const managerColors = managerColorsProp
   const managers = managerNames.map((name) => {
@@ -65,6 +68,7 @@ export default function ManagersTab({
         color={color}
         opps={opps}
         onBack={() => setSelected(null)}
+        uploaderName={uploaderName}
       />
     )
   }
@@ -97,12 +101,13 @@ type ManagerRow = {
 const STAGE_ORDER = ['Discovery', 'Proposal', 'Negotiation', 'Win', 'Loss']
 
 function ManagerDrillDown({
-  m, color, opps, onBack,
+  m, color, opps, onBack, uploaderName,
 }: {
   m: ManagerRow
   color: string
   opps: Opportunity[]
   onBack: () => void
+  uploaderName: string
 }) {
   const sorted = [...opps].sort(
     (a, b) => STAGE_ORDER.indexOf(a.stage) - STAGE_ORDER.indexOf(b.stage) || (b.value ?? 0) - (a.value ?? 0),
@@ -191,6 +196,13 @@ function ManagerDrillDown({
           </table>
         )}
       </div>
+
+      {/* Documents */}
+      <ManagerDocuments
+        managerName={m.name}
+        uploaderName={uploaderName}
+        color={color}
+      />
     </div>
   )
 }
