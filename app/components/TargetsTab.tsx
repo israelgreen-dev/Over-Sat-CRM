@@ -49,6 +49,7 @@ export default function TargetsTab({
   products,
   productTargetRowsByManager,
   onProductTargetRowsByManagerChange,
+  readOnly = false,
 }: {
   managers: string[]
   managerTargets: Record<string, number>
@@ -61,6 +62,7 @@ export default function TargetsTab({
   products: string[]
   productTargetRowsByManager: Record<string, ProductTargetRow[]>
   onProductTargetRowsByManagerChange: (v: Record<string, ProductTargetRow[]>) => void
+  readOnly?: boolean
 }) {
   const [copyTo, setCopyTo] = useState('')
 
@@ -119,7 +121,7 @@ export default function TargetsTab({
             &nbsp;·&nbsp; Each manager's target is derived from their product forecast.
           </p>
         </div>
-        {otherYears.length > 0 && (
+        {otherYears.length > 0 && !readOnly && (
           <div className="flex items-center gap-2">
             <select
               className="rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-2 text-sm text-gray-700 focus:outline-none"
@@ -137,6 +139,9 @@ export default function TargetsTab({
               Copy
             </button>
           </div>
+        )}
+        {readOnly && (
+          <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-400">View only</span>
         )}
       </div>
 
@@ -187,51 +192,55 @@ export default function TargetsTab({
                     return (
                       <tr key={row.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/40'}>
                         <td className="px-4 py-2">
-                          <select
-                            value={row.product}
-                            onChange={(e) => updateRow(name, row.id, 'product', e.target.value)}
-                            className="w-full rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5 text-sm text-gray-900 focus:border-blue-400 focus:bg-white focus:outline-none transition-colors"
-                          >
-                            <option value="">Select product…</option>
-                            {products.map((p) => <option key={p} value={p}>{p}</option>)}
-                          </select>
+                          {readOnly
+                            ? <span className="text-sm text-gray-700">{row.product || '—'}</span>
+                            : <select
+                                value={row.product}
+                                onChange={(e) => updateRow(name, row.id, 'product', e.target.value)}
+                                className="w-full rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5 text-sm text-gray-900 focus:border-blue-400 focus:bg-white focus:outline-none transition-colors"
+                              >
+                                <option value="">Select product…</option>
+                                {products.map((p) => <option key={p} value={p}>{p}</option>)}
+                              </select>
+                          }
                         </td>
                         <td className="px-3 py-2">
-                          <NumericInput
-                            className={inputCls}
-                            value={row.price}
-                            onChange={(v) => updateRow(name, row.id, 'price', v ?? 0)}
-                          />
+                          {readOnly
+                            ? <span className="block text-center text-sm font-medium text-gray-700">{fmtShort(row.price)}</span>
+                            : <NumericInput className={inputCls} value={row.price} onChange={(v) => updateRow(name, row.id, 'price', v ?? 0)} />
+                          }
                         </td>
                         <td className="px-3 py-2">
-                          <NumericInput
-                            className={inputCls}
-                            value={row.quantity}
-                            onChange={(v) => updateRow(name, row.id, 'quantity', Math.max(1, v ?? 1))}
-                          />
+                          {readOnly
+                            ? <span className="block text-center text-sm font-medium text-gray-700">{row.quantity}</span>
+                            : <NumericInput className={inputCls} value={row.quantity} onChange={(v) => updateRow(name, row.id, 'quantity', Math.max(1, v ?? 1))} />
+                          }
                         </td>
                         <td className="px-3 py-2 text-center font-semibold text-blue-600">{fmtShort(tp)}</td>
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-1">
-                            <NumericInput
-                              className={inputCls}
-                              value={row.probability}
-                              onChange={(v) => updateRow(name, row.id, 'probability', Math.min(100, Math.max(0, v ?? 0)))}
-                            />
-                            <span className="text-xs text-gray-400 shrink-0">%</span>
+                            {readOnly
+                              ? <span className="block w-full text-center text-sm font-medium text-gray-700">{row.probability}%</span>
+                              : <>
+                                  <NumericInput className={inputCls} value={row.probability} onChange={(v) => updateRow(name, row.id, 'probability', Math.min(100, Math.max(0, v ?? 0)))} />
+                                  <span className="text-xs text-gray-400 shrink-0">%</span>
+                                </>
+                            }
                           </div>
                         </td>
                         <td className="px-3 py-2 text-center font-bold text-emerald-600">{fmtShort(wp)}</td>
                         <td className="px-2 py-2 text-center">
-                          <button
-                            onClick={() => deleteRow(name, row.id)}
-                            title="Remove row"
-                            className="rounded-lg p-1 text-gray-300 hover:bg-red-50 hover:text-red-400 transition-colors"
-                          >
-                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                          </button>
+                          {!readOnly && (
+                            <button
+                              onClick={() => deleteRow(name, row.id)}
+                              title="Remove row"
+                              className="rounded-lg p-1 text-gray-300 hover:bg-red-50 hover:text-red-400 transition-colors"
+                            >
+                              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          )}
                         </td>
                       </tr>
                     )
@@ -259,14 +268,14 @@ export default function TargetsTab({
             </div>
 
             {/* Add product row */}
-            <div className="border-t border-gray-50 px-4 py-2">
+            {!readOnly && <div className="border-t border-gray-50 px-4 py-2">
               <button
                 onClick={() => addRow(name)}
                 className="rounded-lg px-3 py-1.5 text-xs font-semibold text-orange-500 hover:bg-orange-50 transition-colors"
               >
                 + Add Product
               </button>
-            </div>
+            </div>}
 
             {/* Quarterly split */}
             <div className="border-t border-gray-100 overflow-x-auto">
@@ -285,28 +294,29 @@ export default function TargetsTab({
                   <tr className="bg-white">
                     {/* Small split button aligned right in its cell */}
                     <td className="px-3 py-2 text-right">
-                      <button
-                        onClick={() => {
-                          const q = Math.round(annualTarget / 4)
-                          onQuarterlyTargetsChange({ ...quarterlyTargets, [name]: { q1: q, q2: q, q3: q, q4: q } })
-                        }}
-                        disabled={annualTarget === 0}
-                        title={`Split ${fmt(annualTarget)} equally across Q1–Q4`}
-                        className="inline-flex items-center gap-1 rounded-lg bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white shadow-sm hover:bg-amber-400 active:bg-amber-600 disabled:opacity-40 transition-colors whitespace-nowrap"
-                      >
-                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 7h18M3 12h18M3 17h18" />
-                        </svg>
-                        Split ÷ 4
-                      </button>
+                      {!readOnly && (
+                        <button
+                          onClick={() => {
+                            const q = Math.round(annualTarget / 4)
+                            onQuarterlyTargetsChange({ ...quarterlyTargets, [name]: { q1: q, q2: q, q3: q, q4: q } })
+                          }}
+                          disabled={annualTarget === 0}
+                          title={`Split ${fmt(annualTarget)} equally across Q1–Q4`}
+                          className="inline-flex items-center gap-1 rounded-lg bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white shadow-sm hover:bg-amber-400 active:bg-amber-600 disabled:opacity-40 transition-colors whitespace-nowrap"
+                        >
+                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 7h18M3 12h18M3 17h18" />
+                          </svg>
+                          Split ÷ 4
+                        </button>
+                      )}
                     </td>
                     {QUARTERS.map((q) => (
                       <td key={q} className="px-3 py-2 w-28">
-                        <NumericInput
-                          className={qInputCls}
-                          value={qt[q]}
-                          onChange={(v) => handleQuarter(name, q, v)}
-                        />
+                        {readOnly
+                          ? <span className="block text-center text-sm font-semibold text-amber-700">{fmtShort(qt[q])}</span>
+                          : <NumericInput className={qInputCls} value={qt[q]} onChange={(v) => handleQuarter(name, q, v)} />
+                        }
                       </td>
                     ))}
                   </tr>

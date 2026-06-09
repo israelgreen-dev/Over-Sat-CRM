@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useMemo } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell, Legend,
@@ -51,20 +52,43 @@ function Empty() {
   return <p className="py-8 text-center text-sm text-gray-400">No data for this period.</p>
 }
 
+const QUARTERS: { label: string; months: number[] }[] = [
+  { label: 'Q1', months: [1, 2, 3] },
+  { label: 'Q2', months: [4, 5, 6] },
+  { label: 'Q3', months: [7, 8, 9] },
+  { label: 'Q4', months: [10, 11, 12] },
+]
+
 export default function AnalyticsTab({
   opportunities,
   managers,
   managerTargets,
   managerColors,
   selectedYear,
+  availableYears = [],
+  onYearChange,
 }: {
   opportunities: Opportunity[]
   managers: string[]
   managerTargets: Record<string, number>
   managerColors: Record<string, string>
   selectedYear: string
+  availableYears?: string[]
+  onYearChange?: (year: string) => void
 }) {
-  const opps   = opportunities
+  const [selectedQuarter, setSelectedQuarter] = useState<string>('')
+
+  const opps = useMemo(() => {
+    if (!selectedQuarter) return opportunities
+    const q = QUARTERS.find((q) => q.label === selectedQuarter)
+    if (!q) return opportunities
+    return opportunities.filter((o) => {
+      const cd = (o as any).close_date as string | undefined
+      if (!cd) return false
+      const month = new Date(cd).getMonth() + 1
+      return q.months.includes(month)
+    })
+  }, [opportunities, selectedQuarter])
   const wins   = opps.filter((o) => o.stage === 'Win')
   const losses = opps.filter((o) => o.stage === 'Loss')
   const active = opps.filter((o) => !['Win', 'Loss'].includes(o.stage))
@@ -158,6 +182,57 @@ export default function AnalyticsTab({
 
   return (
     <div className="space-y-6">
+
+      {/* ── Year + Quarter quick filters ─────────────────────────────────── */}
+      <div className="flex flex-wrap items-center gap-4">
+        {/* Year */}
+        {availableYears.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Year:</span>
+            {availableYears.map((y) => (
+              <button
+                key={y}
+                onClick={() => { onYearChange?.(y); setSelectedQuarter('') }}
+                className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                  selectedYear === y
+                    ? 'bg-gray-800 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {y}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Quarter */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Quarter:</span>
+          <button
+            onClick={() => setSelectedQuarter('')}
+            className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+              selectedQuarter === ''
+                ? 'bg-gray-800 text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            All
+          </button>
+          {QUARTERS.map(({ label }) => (
+            <button
+              key={label}
+              onClick={() => setSelectedQuarter(selectedQuarter === label ? '' : label)}
+              className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                selectedQuarter === label
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <div>
         <h2 className="text-base font-bold text-gray-900">Analytics — {selectedYear}</h2>
@@ -478,14 +553,15 @@ function SalesFunnel({
       </div>
 
       {/* Legend + stats */}
-      <div className="flex-1 space-y-2">
+      <div className="flex-1 min-w-0 space-y-2">
         {data.map((d) => (
-          <div key={d.stage} className="flex items-center gap-3 rounded-xl bg-gray-50 px-4 py-2.5">
+          <div key={d.stage} className="grid items-center gap-2 rounded-xl bg-gray-50 px-3 py-2.5"
+            style={{ gridTemplateColumns: '12px auto 1fr auto auto' }}>
             <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: d.fill }} />
-            <span className="w-24 text-sm font-semibold text-gray-800">{d.stage}</span>
-            <span className="text-sm text-gray-600">{d.count} deal{d.count !== 1 ? 's' : ''}</span>
-            <span className="ml-auto text-sm font-semibold text-gray-900">{fmtShort(d.value)}</span>
-            <span className="w-10 text-right text-xs text-gray-400">
+            <span className="text-sm font-semibold text-gray-800 whitespace-nowrap">{d.stage}</span>
+            <span className="text-sm text-gray-500 text-center whitespace-nowrap">{d.count} deal{d.count !== 1 ? 's' : ''}</span>
+            <span className="text-sm font-semibold text-gray-900 text-right whitespace-nowrap">{fmtShort(d.value)}</span>
+            <span className="w-9 text-right text-xs text-gray-400 whitespace-nowrap">
               {total > 0 ? `${Math.round((d.count / total) * 100)}%` : '—'}
             </span>
           </div>

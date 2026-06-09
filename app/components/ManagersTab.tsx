@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { type Opportunity } from './OpportunitiesTable'
 import { MANAGER_TARGETS, MANAGER_COLORS } from './DashboardAnalytics'
 
@@ -50,10 +51,33 @@ export default function ManagersTab({
     return { name, target, forecast, closed, open, pct, topDeals, count: opps.length }
   })
 
+  const [selected, setSelected] = useState<string | null>(null)
+
+  if (selected) {
+    const m = managers.find((x) => x.name === selected)!
+    const color = managerColors[selected] ?? '#94a3b8'
+    const opps  = opportunities.filter(
+      (o) => (o.owner as string)?.toLowerCase() === selected.toLowerCase(),
+    )
+    return (
+      <ManagerDrillDown
+        m={m}
+        color={color}
+        opps={opps}
+        onBack={() => setSelected(null)}
+      />
+    )
+  }
+
   return (
     <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
       {managers.map((m) => (
-        <ManagerCard key={m.name} m={m} color={MANAGER_COLORS[m.name] ?? '#94a3b8'} />
+        <ManagerCard
+          key={m.name}
+          m={m}
+          color={managerColors[m.name] ?? '#94a3b8'}
+          onClick={() => setSelected(m.name)}
+        />
       ))}
     </div>
   )
@@ -70,9 +94,113 @@ type ManagerRow = {
   topDeals: Opportunity[]
 }
 
-function ManagerCard({ m, color }: { m: ManagerRow; color: string }) {
+const STAGE_ORDER = ['Discovery', 'Proposal', 'Negotiation', 'Win', 'Loss']
+
+function ManagerDrillDown({
+  m, color, opps, onBack,
+}: {
+  m: ManagerRow
+  color: string
+  opps: Opportunity[]
+  onBack: () => void
+}) {
+  const sorted = [...opps].sort(
+    (a, b) => STAGE_ORDER.indexOf(a.stage) - STAGE_ORDER.indexOf(b.stage) || (b.value ?? 0) - (a.value ?? 0),
+  )
+
   return (
-    <div className="flex flex-col rounded-xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+    <div>
+      {/* Back button + header */}
+      <div className="mb-5 flex items-center gap-3">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 shadow-sm hover:bg-gray-50 transition-colors"
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+          Sales Managers
+        </button>
+        <div className="flex items-center gap-2">
+          <div
+            className="flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold text-white"
+            style={{ backgroundColor: color }}
+          >
+            {m.name[0]}
+          </div>
+          <h2 className="text-base font-bold text-gray-900">{m.name}</h2>
+          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">
+            {opps.length} opportunit{opps.length === 1 ? 'y' : 'ies'}
+          </span>
+        </div>
+      </div>
+
+      {/* Summary strip */}
+      <div className="mb-5 grid grid-cols-3 gap-3">
+        {[
+          { label: 'Target',   value: fmtShort(m.target),   cls: 'text-gray-900' },
+          { label: 'Won',      value: fmtShort(m.closed),   cls: 'text-green-600' },
+          { label: 'Open Pipeline', value: fmtShort(m.open), cls: 'text-blue-600' },
+        ].map(({ label, value, cls }) => (
+          <div key={label} className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm text-center">
+            <p className="text-xs text-gray-400">{label}</p>
+            <p className={`text-lg font-bold ${cls}`}>{value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Opportunities table */}
+      <div className="rounded-xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+        {sorted.length === 0 ? (
+          <p className="p-6 text-sm text-gray-400">No opportunities assigned yet.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 bg-gray-50 text-xs font-semibold uppercase tracking-wider text-gray-400">
+                <th className="px-4 py-3 text-left">Opportunity</th>
+                <th className="px-4 py-3 text-left">Customer</th>
+                <th className="px-4 py-3 text-left">Stage</th>
+                <th className="px-4 py-3 text-left">Product</th>
+                <th className="px-4 py-3 text-right">Value</th>
+                <th className="px-4 py-3 text-left">Close Date</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {sorted.map((o) => (
+                <tr key={o.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-4 py-3 font-medium text-gray-900">{o.name ?? '—'}</td>
+                  <td className="px-4 py-3 text-gray-600">{o.customer_name ?? '—'}</td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${
+                      o.stage === 'Win'         ? 'bg-green-100 text-green-700' :
+                      o.stage === 'Loss'        ? 'bg-red-100 text-red-600' :
+                      o.stage === 'Negotiation'? 'bg-orange-100 text-orange-700' :
+                      o.stage === 'Proposal'   ? 'bg-yellow-100 text-yellow-700' :
+                                                  'bg-blue-100 text-blue-700'
+                    }`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${STAGE_DOT[o.stage] ?? 'bg-gray-300'}`} />
+                      {o.stage}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-gray-600">{(o.product as string) ?? '—'}</td>
+                  <td className="px-4 py-3 text-right font-bold text-gray-900">{fmtFull(o.value ?? 0)}</td>
+                  <td className="px-4 py-3 text-gray-500">{(o as any).close_date ?? '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ManagerCard({ m, color, onClick }: { m: ManagerRow; color: string; onClick: () => void }) {
+  return (
+    <div
+      className="flex flex-col rounded-xl border border-gray-100 bg-white shadow-sm overflow-hidden cursor-pointer hover:shadow-md hover:border-gray-200 transition-all"
+      onClick={onClick}
+    >
       {/* Colored top strip */}
       <div className="h-1.5 w-full" style={{ backgroundColor: color }} />
 
@@ -137,7 +265,7 @@ function ManagerCard({ m, color }: { m: ManagerRow; color: string }) {
                 <li key={deal.id} className="flex items-center justify-between gap-2">
                   <div className="flex min-w-0 items-center gap-2">
                     <span
-                      className={`h-2 w-2 shrink-0 rounded-full ${STAGE_DOT[deal.stage] ?? 'bg-gray-300'}`}
+                      className={`h-2 w-2 shrink-0 rounded-full ${STAGE_DOT[deal.stage as string] ?? 'bg-gray-300'}`}
                     />
                     <span className="truncate text-xs text-gray-700">
                       {(deal.name as string) ?? (deal.customer_name as string) ?? '—'}

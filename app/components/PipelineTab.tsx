@@ -74,6 +74,7 @@ export default function PipelineTab({
   onAddFormOpenChange,
   products,
   managers,
+  managerColors = {},
   defaultOwner = '',
   isAdmin,
   onOppUpdated,
@@ -85,6 +86,7 @@ export default function PipelineTab({
   onAddFormOpenChange?: (v: boolean) => void
   products?: string[]
   managers?: string[]
+  managerColors?: Record<string, string>
   defaultOwner?: string
   isAdmin?: boolean
   onOppUpdated?: (updated: Opportunity) => void
@@ -167,6 +169,71 @@ export default function PipelineTab({
 
   return (
     <>
+      {/* ── Manager shortcut buttons ─────────────────────────────────────── */}
+      {managers && managers.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Quick filter:</span>
+          <button
+            onClick={() => setFilterManager('')}
+            className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+              filterManager === ''
+                ? 'bg-gray-800 text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            All
+          </button>
+          {managers.map((name) => {
+            const color  = managerColors[name] ?? '#94a3b8'
+            const active = filterManager === name
+            return (
+              <button
+                key={name}
+                onClick={() => setFilterManager(active ? '' : name)}
+                style={{
+                  backgroundColor: active ? color : `${color}22`,
+                  color:           active ? '#fff' : color,
+                  borderColor:     color,
+                }}
+                className="rounded-full border px-3 py-1 text-xs font-semibold transition-all hover:opacity-90"
+              >
+                {name}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {/* ── Product shortcut buttons ─────────────────────────────────────── */}
+      {productOptions.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Product:</span>
+          <button
+            onClick={() => setFilterProduct('')}
+            className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+              filterProduct === ''
+                ? 'bg-gray-800 text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            All
+          </button>
+          {productOptions.map((name) => (
+            <button
+              key={name}
+              onClick={() => setFilterProduct(filterProduct === name ? '' : name)}
+              className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                filterProduct === name
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {name}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* ── Search bar ───────────────────────────────────────────────────── */}
       <div className="mb-3 flex items-center gap-3">
         <div className="relative flex-1">

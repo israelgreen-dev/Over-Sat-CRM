@@ -25,7 +25,7 @@ const DEFAULT_PRODUCTS = ['Python5', 'Python7', 'Mantis10', 'Rigel', 'Griffin', 
 const COLOR_PALETTE    = ['#3b82f6','#10b981','#f59e0b','#8b5cf6','#ef4444','#06b6d4','#f97316','#ec4899','#84cc16','#6366f1']
 const CURRENT_YEAR     = String(new Date().getFullYear())
 
-type Tab = 'Dashboard' | 'Sales Managers' | 'My Performance' | 'Pipeline' | 'Analytics' | 'Targets' | 'Settings'
+type Tab = 'Dashboard' | 'Sales Managers' | 'Pipeline' | 'Analytics' | 'Targets' | 'Settings'
 
 type UserProfile = {
   id: string
@@ -252,12 +252,16 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
   )
 
   const tabs = useMemo<Tab[]>(
-    () => isHoS
+    () => isAdmin && isHoS
+      ? ['Dashboard', 'Sales Managers', 'Pipeline', 'Analytics', 'Targets', 'Settings']
+      : isAdmin && !isHoS
+      ? ['Dashboard', 'Pipeline', 'Analytics', 'Targets']
+      : isHoS
       ? ['Dashboard', 'Sales Managers', 'Pipeline', 'Analytics', 'Targets', 'Settings']
       : isPartner
       ? ['Dashboard', 'Sales Managers', 'Pipeline', 'Analytics']
-      : ['Dashboard', 'My Performance', 'Pipeline', 'Analytics'],
-    [isHoS, isPartner],
+      : ['Dashboard', 'Pipeline', 'Analytics'],
+    [isAdmin, isHoS, isPartner],
   )
   const safeTab: Tab = tabs.includes(activeTab) ? activeTab : 'Dashboard'
 
@@ -574,15 +578,6 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
           />
         )}
 
-        {safeTab === 'My Performance' && !isHoS && (
-          <ManagersTab
-            opportunities={liveOpps}
-            managerTargets={managerTargets}
-            managers={[viewAs]}
-            managerColors={managerColors}
-          />
-        )}
-
         {safeTab === 'Pipeline' && (
           <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
             <div className="mb-4">
@@ -599,6 +594,7 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
               onAddFormOpenChange={setAddFormOpen}
               products={products}
               managers={isFullAccess ? managers : undefined}
+              managerColors={managerColors}
               defaultOwner={managers.find((m) => m.toLowerCase() === (profile?.name ?? '').toLowerCase()) ?? managers.find((m) => (profile?.name ?? '').toLowerCase().endsWith(m.toLowerCase())) ?? profile?.name ?? ''}
               isAdmin={isAdmin}
               onOppUpdated={handleOppUpdated}
@@ -608,9 +604,13 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
           </div>
         )}
 
-        {safeTab === 'Targets' && isHoS && (
+        {safeTab === 'Targets' && (isHoS || isAdmin) && (
           <TargetsTab
-            managers={managers.filter((m) => m.toLowerCase() !== headOfSales.toLowerCase())}
+            managers={
+              isAdmin && !isHoS
+                ? managers.filter((m) => m.toLowerCase() === viewAs.toLowerCase())
+                : managers.filter((m) => m.toLowerCase() !== headOfSales.toLowerCase())
+            }
             managerTargets={managerTargets}
             onManagerTargetsChange={setManagerTargets}
             quarterlyTargets={quarterlyTargets}
@@ -623,10 +623,11 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
             products={products}
             productTargetRowsByManager={productTargetRowsByManager}
             onProductTargetRowsByManagerChange={setProductTargetRowsByManager}
+            readOnly={isAdmin && !isHoS}
           />
         )}
 
-        {safeTab === 'Settings' && isHoS && (
+        {safeTab === 'Settings' && (isHoS || isAdmin) && (
           <div className="space-y-10">
             <SettingsTab
               managers={managers}
@@ -655,10 +656,12 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
         {safeTab === 'Analytics' && (
           <AnalyticsTab
             opportunities={visibleOpps}
-            managers={allManagers}
-            managerTargets={managerTargets}
+            managers={isAdmin && !isHoS ? [viewAs] : allManagers}
+            managerTargets={isAdmin && !isHoS ? { [viewAs]: managerTargets[viewAs] ?? 0 } : managerTargets}
             managerColors={managerColors}
             selectedYear={selectedYear}
+            availableYears={availableYears}
+            onYearChange={setSelectedYear}
           />
         )}
 
