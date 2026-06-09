@@ -204,6 +204,7 @@ export default function ManagerDocuments({
 
               {/* Details */}
               <div className="min-w-0 flex-1">
+                {/* File name + size */}
                 <div className="flex items-center gap-2">
                   <a
                     href={doc.file_url}
@@ -215,13 +216,27 @@ export default function ManagerDocuments({
                   </a>
                   <span className="shrink-0 text-xs text-gray-400">{fmtSize(doc.file_size)}</span>
                 </div>
+
+                {/* Note */}
                 {doc.note && (
-                  <p className="mt-0.5 text-xs text-gray-600">{doc.note}</p>
+                  <div className="mt-1 flex items-start gap-1.5">
+                    <svg className="mt-0.5 h-3 w-3 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 012.828 2.828L11.828 15.828a2 2 0 01-1.414.586H8v-2.414a2 2 0 01.586-1.414z" />
+                    </svg>
+                    <p className="text-xs text-gray-700">{doc.note}</p>
+                  </div>
                 )}
-                <p className="mt-0.5 text-xs text-gray-400">
-                  {fmtDate(doc.created_at)}
-                  {doc.uploaded_by && <> · by <span className="font-medium text-gray-500">{doc.uploaded_by}</span></>}
-                </p>
+
+                {/* Timestamp + uploader */}
+                <div className="mt-1 flex items-center gap-1.5">
+                  <svg className="h-3 w-3 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="text-xs font-medium text-gray-500">{fmtDate(doc.created_at)}</span>
+                  {doc.uploaded_by && (
+                    <span className="text-xs text-gray-400">· by <span className="font-medium text-gray-500">{doc.uploaded_by}</span></span>
+                  )}
+                </div>
               </div>
 
               {/* Delete */}
