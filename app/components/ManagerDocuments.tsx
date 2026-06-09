@@ -94,11 +94,19 @@ export default function ManagerDocuments({
     }
   }
 
-  async function handleDelete(id: string) {
+  async function handleDelete(id: string, fileName: string) {
+    if (!confirm(`Delete "${fileName}"? This cannot be undone.`)) return
     setDeleting(id)
     try {
-      await fetch(`/api/manager-docs?id=${id}`, { method: 'DELETE' })
+      const res = await fetch(`/api/manager-docs?id=${id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        setError(d.error ?? 'Delete failed')
+        return
+      }
       setDocs((prev) => prev.filter((d) => d.id !== id))
+    } catch {
+      setError('Delete failed — please try again.')
     } finally {
       setDeleting(null)
     }
@@ -244,7 +252,7 @@ export default function ManagerDocuments({
 
               {/* Delete */}
               <button
-                onClick={() => handleDelete(doc.id)}
+                onClick={() => handleDelete(doc.id, doc.file_name)}
                 disabled={deleting === doc.id}
                 className="mt-0.5 shrink-0 rounded-lg p-1 text-gray-300 transition-colors hover:bg-red-50 hover:text-red-400 disabled:opacity-40"
                 title="Remove document"
