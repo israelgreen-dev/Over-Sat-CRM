@@ -73,15 +73,33 @@ function ProjectionTab({
   const [filterManager, setFilterManager] = useState('')
   const [filterProduct, setFilterProduct] = useState('')
   const [filterStage, setFilterStage]     = useState('')
+  const [filterYear, setFilterYear]       = useState('')
+  const [filterQuarter, setFilterQuarter] = useState('')
 
-  const anyFilterActive = !!(filterText || filterManager || filterProduct || filterStage)
+  const anyFilterActive = !!(filterText || filterManager || filterProduct || filterStage || filterYear || filterQuarter)
 
   function clearAllFilters() {
     setFilterText('')
     setFilterManager('')
     setFilterProduct('')
     setFilterStage('')
+    setFilterYear('')
+    setFilterQuarter('')
   }
+
+  // Year/Quarter narrow the visible time columns (quarter labels are "Q3-2026").
+  const yearOptions    = useMemo(() => Array.from(new Set(quarters.map((q) => q.split('-')[1]))), [quarters])
+  const quarterOptions = ['Q1', 'Q2', 'Q3', 'Q4']
+
+  const visibleQuarters = useMemo(
+    () => quarters.filter((q) => {
+      const [qq, yy] = q.split('-')
+      if (filterYear    && yy !== filterYear)    return false
+      if (filterQuarter && qq !== filterQuarter) return false
+      return true
+    }),
+    [quarters, filterYear, filterQuarter],
+  )
 
   // Lost deals don't project income; Win deals keep projecting future income.
   const projectable = useMemo(
@@ -119,12 +137,15 @@ function ProjectionTab({
   )
 
   // ── Projection rows (filtered) ────────────────────────────────────────────
+  // Row amounts cover only the visible quarters, so the Year/Quarter filters
+  // flow through every total, chart, and export below. The "no breakdown"
+  // notice stays tied to the full 8-quarter horizon to match its wording.
   const { rows, withoutBreakdown } = useMemo(() => {
     const rows = filtered
       .map((o) => {
         const qi  = quarterlyIncomes(o)
         const cur = o.currency as string | undefined
-        const perQuarter = quarters.map((q) => toUSD(qi[q] ?? 0, cur))
+        const perQuarter = visibleQuarters.map((q) => toUSD(qi[q] ?? 0, cur))
         const total = perQuarter.reduce((s, v) => s + v, 0)
         const prob  = effectiveProbability(o, probabilityDefaults)
         return { opp: o, perQuarter, total, prob }
@@ -136,15 +157,15 @@ function ProjectionTab({
       return !quarters.some((q) => (qi[q] ?? 0) > 0)
     })
     return { rows, withoutBreakdown }
-  }, [filtered, quarters, probabilityDefaults])
+  }, [filtered, quarters, visibleQuarters, probabilityDefaults])
 
   const chartData = useMemo(
-    () => quarters.map((q, i) => ({
+    () => visibleQuarters.map((q, i) => ({
       quarter:  q,
       Planned:  rows.reduce((s, r) => s + r.perQuarter[i], 0),
       Weighted: Math.round(rows.reduce((s, r) => s + (r.perQuarter[i] * r.prob) / 100, 0)),
     })),
-    [quarters, rows],
+    [visibleQuarters, rows],
   )
 
   // ── Per-manager quarterly summary ─────────────────────────────────────────
@@ -152,7 +173,7 @@ function ProjectionTab({
     const map: Record<string, { perQuarter: number[]; total: number; deals: number }> = {}
     rows.forEach((r) => {
       const name = (r.opp.owner as string) || 'Unassigned'
-      if (!map[name]) map[name] = { perQuarter: quarters.map(() => 0), total: 0, deals: 0 }
+      if (!map[name]) map[name] = { perQuarter: visibleQuarters.map(() => 0), total: 0, deals: 0 }
       r.perQuarter.forEach((v, i) => { map[name].perQuarter[i] += v })
       map[name].total += r.total
       map[name].deals += 1
@@ -160,15 +181,15 @@ function ProjectionTab({
     return Object.entries(map)
       .map(([name, d]) => ({ name, ...d }))
       .sort((a, b) => b.total - a.total)
-  }, [rows, quarters])
+  }, [rows, visibleQuarters])
 
   const grandTotal    = rows.reduce((s, r) => s + r.total, 0)
   const weightedTotal = rows.reduce((s, r) => s + (r.total * r.prob) / 100, 0)
-  const quarterTotals = quarters.map((_, i) => rows.reduce((s, r) => s + r.perQuarter[i], 0))
+  const quarterTotals = visibleQuarters.map((_, i) => rows.reduce((s, r) => s + r.perQuarter[i], 0))
 
   // ── CSV report export ─────────────────────────────────────────────────────
   function exportProjectionCSV() {
-    const headers = ['Opportunity', 'Account', 'Manager', 'Stage', 'Probability %', ...quarters, 'Total']
+    const headers = ['Opportunity', 'Account', 'Manager', 'Stage', 'Probability %', ...visibleQuarters, 'Total']
     const lines   = rows.map(({ opp, perQuarter, total, prob }) => [
       opp.name ?? '', (opp.customer_name as string) ?? '', (opp.owner as string) ?? '',
       opp.stage ?? '', prob, ...perQuarter.map((v) => Math.round(v)), Math.round(total),
@@ -219,6 +240,8 @@ function ProjectionTab({
         <FilterSelect label="Manager" value={filterManager} onChange={setFilterManager} placeholder="All Managers" options={managerOptions} />
         <FilterSelect label="Product" value={filterProduct} onChange={setFilterProduct} placeholder="All Products" options={productOptions} />
         <FilterSelect label="Stage"   value={filterStage}   onChange={setFilterStage}   placeholder="All Stages"   options={stageOptions} />
+        <FilterSelect label="Year"    value={filterYear}    onChange={setFilterYear}    placeholder="All Years"    options={yearOptions} />
+        <FilterSelect label="Quarter" value={filterQuarter} onChange={setFilterQuarter} placeholder="All Quarters" options={quarterOptions} />
         {anyFilterActive && (
           <span className="flex items-center gap-3 text-xs text-gray-400">
             <span className="rounded-full border border-gray-200 bg-white px-2.5 py-0.5 font-semibold text-gray-500 shadow-sm">
@@ -234,7 +257,12 @@ function ProjectionTab({
         <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm border-t-4 border-blue-500">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400">Total Planned</p>
           <p className="tabular-nums text-3xl font-bold leading-none text-slate-900">{fmtFull(grandTotal)}</p>
-          <p className="mt-2 text-xs text-gray-400">over the next 8 quarters{anyFilterActive ? ' (filtered)' : ''}</p>
+          <p className="mt-2 text-xs text-gray-400">
+            {visibleQuarters.length === quarters.length
+              ? 'over the next 8 quarters'
+              : `over ${visibleQuarters.length} quarter${visibleQuarters.length !== 1 ? 's' : ''}: ${visibleQuarters.join(', ')}`}
+            {anyFilterActive ? ' (filtered)' : ''}
+          </p>
         </div>
         <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm border-t-4 border-indigo-500">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400">Weighted Planned</p>
@@ -288,7 +316,7 @@ function ProjectionTab({
                 <tr>
                   <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Manager</th>
                   <th className="whitespace-nowrap px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">Deals</th>
-                  {quarters.map((q) => (
+                  {visibleQuarters.map((q) => (
                     <th key={q} className="whitespace-nowrap px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">{q}</th>
                   ))}
                   <th className="whitespace-nowrap px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-700">Total</th>
@@ -338,7 +366,7 @@ function ProjectionTab({
                   <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Opportunity</th>
                   <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Manager</th>
                   <th className="whitespace-nowrap px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Stage</th>
-                  {quarters.map((q) => (
+                  {visibleQuarters.map((q) => (
                     <th key={q} className="whitespace-nowrap px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">{q}</th>
                   ))}
                   <th className="whitespace-nowrap px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-700">Total</th>
