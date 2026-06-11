@@ -77,6 +77,7 @@ export default function PipelineTab({
   managerColors = {},
   defaultOwner = '',
   isAdmin,
+  probabilityDefaults,
   onOppUpdated,
   onOppAdded,
   onOppDeleted,
@@ -89,6 +90,7 @@ export default function PipelineTab({
   managerColors?: Record<string, string>
   defaultOwner?: string
   isAdmin?: boolean
+  probabilityDefaults?: Record<string, number>
   onOppUpdated?: (updated: Opportunity) => void
   onOppAdded?: (newOpp: Opportunity) => void
   onOppDeleted?: (id: string | number) => void
@@ -117,7 +119,7 @@ export default function PipelineTab({
     setFilterStatus('')
   }
 
-  function handleSort(field: string, numeric: boolean) {
+  function handleSort(field: string) {
     if (sortKey === field) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
     } else {
@@ -334,7 +336,7 @@ export default function PipelineTab({
                     className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500"
                   >
                     <button
-                      onClick={() => handleSort(field, numeric ?? false)}
+                      onClick={() => handleSort(field)}
                       className="inline-flex items-center gap-1 transition-colors hover:text-gray-800"
                     >
                       {label}
@@ -354,7 +356,7 @@ export default function PipelineTab({
                 <td colSpan={COLUMNS.length} className="px-4 py-12 text-center">
                   {anyFilterActive ? (
                     <div>
-                      <p className="text-sm font-medium text-gray-500">No results for "{filterText || [filterManager, filterProduct, filterStage, filterStatus].filter(Boolean).join(', ')}"</p>
+                      <p className="text-sm font-medium text-gray-500">No results for &quot;{filterText || [filterManager, filterProduct, filterStage, filterStatus].filter(Boolean).join(', ')}&quot;</p>
                       <button
                         onClick={clearAllFilters}
                         className="mt-2 text-xs text-blue-600 hover:underline"
@@ -396,14 +398,14 @@ export default function PipelineTab({
                   </td>
                   {/* Probability */}
                   <td className="whitespace-nowrap px-4 py-3 text-center tabular-nums text-blue-600 font-medium">
-                    {effectiveProbability(opp)}%
+                    {effectiveProbability(opp, probabilityDefaults)}%
                     {(opp as any).probability == null && (
                       <span className="ml-1 text-[10px] text-gray-400">(def)</span>
                     )}
                   </td>
                   {/* Weighted Value */}
                   <td className="whitespace-nowrap px-4 py-3 font-semibold tabular-nums text-indigo-600">
-                    {opp.value != null ? fmtUSD(weightedValue(opp), (opp as any).currency) : '—'}
+                    {opp.value != null ? fmtUSD(weightedValue(opp, probabilityDefaults), (opp as any).currency) : '—'}
                   </td>
                   {/* Stage */}
                   <td className="px-4 py-3">
@@ -439,6 +441,7 @@ export default function PipelineTab({
           isAdmin={isAdmin}
           products={products}
           managers={managers}
+          probabilityDefaults={probabilityDefaults}
         />
       )}
 
@@ -447,6 +450,7 @@ export default function PipelineTab({
           products={products}
           managers={managers}
           defaultOwner={defaultOwner}
+          probabilityDefaults={probabilityDefaults}
           onClose={() => onAddFormOpenChange?.(false)}
           onAdded={handleAdded}
           onUpdated={handleAddedThenUpdated}

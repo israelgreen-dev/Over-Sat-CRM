@@ -2,24 +2,38 @@
 
 import { useState } from 'react'
 
+const PROBABILITY_STAGES = ['Discovery', 'Proposal', 'Negotiation', 'Win', 'Loss']
+
+const STAGE_ACCENTS: Record<string, string> = {
+  Discovery: '#3b82f6', Proposal: '#f59e0b', Negotiation: '#f97316', Win: '#10b981', Loss: '#ef4444',
+}
+
 export default function SettingsTab({
   managers,
   products,
   headOfSales,
   partners,
+  managerColors,
+  probabilityDefaults,
   onManagersChange,
   onProductsChange,
   onHeadOfSalesChange,
   onPartnersChange,
+  onManagerColorChange,
+  onProbabilityDefaultsChange,
 }: {
   managers: string[]
   products: string[]
   headOfSales: string
   partners: string[]
+  managerColors: Record<string, string>
+  probabilityDefaults: Record<string, number>
   onManagersChange: (v: string[]) => void
   onProductsChange: (v: string[]) => void
   onHeadOfSalesChange: (v: string) => void
   onPartnersChange: (v: string[]) => void
+  onManagerColorChange: (name: string, color: string) => void
+  onProbabilityDefaultsChange: (v: Record<string, number>) => void
 }) {
   const [hosEditing, setHosEditing] = useState(false)
   const [hosVal, setHosVal]         = useState(headOfSales)
@@ -80,15 +94,52 @@ export default function SettingsTab({
         </div>
       </div>
 
+      {/* ── Probability defaults ───────────────────────────────────────────── */}
+      <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+        <div className="mb-1 flex items-center gap-2">
+          <span className="h-2.5 w-2.5 rounded-full bg-indigo-500" />
+          <h3 className="text-sm font-bold text-gray-900">Default Probability % by Stage</h3>
+        </div>
+        <p className="mb-4 text-xs text-gray-400">
+          Used for an opportunity&apos;s Probability % and Weighted Value when no probability is set manually on the deal.
+        </p>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          {PROBABILITY_STAGES.map((stage) => (
+            <div key={stage} className="rounded-xl bg-gray-50 p-3">
+              <div className="mb-1.5 flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: STAGE_ACCENTS[stage] }} />
+                <span className="text-xs font-semibold text-gray-700">{stage}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  className="w-full rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm font-semibold tabular-nums text-gray-900 focus:border-blue-400 focus:outline-none"
+                  value={probabilityDefaults[stage] ?? 0}
+                  onChange={(e) => {
+                    const v = Math.min(100, Math.max(0, Number(e.target.value) || 0))
+                    onProbabilityDefaultsChange({ ...probabilityDefaults, [stage]: v })
+                  }}
+                />
+                <span className="text-xs text-gray-400">%</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* ── Lists ──────────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
         <ListEditor
           title="Sales Managers"
-          description="Names available in the Owner field on all opportunities."
+          description="Names available in the Owner field on all opportunities. Pick a color for each manager — it is used in all charts and analytics."
           items={managers}
           onChange={onManagersChange}
           placeholder="e.g. David"
           accent="#3b82f6"
+          itemColors={managerColors}
+          onItemColorChange={onManagerColorChange}
         />
         <ListEditor
           title="Products"
@@ -118,6 +169,8 @@ function ListEditor({
   onChange,
   placeholder,
   accent,
+  itemColors,
+  onItemColorChange,
 }: {
   title: string
   description: string
@@ -125,6 +178,8 @@ function ListEditor({
   onChange: (v: string[]) => void
   placeholder: string
   accent: string
+  itemColors?: Record<string, string>
+  onItemColorChange?: (item: string, color: string) => void
 }) {
   const [newItem, setNewItem]     = useState('')
   const [editingIdx, setEditingIdx] = useState<number | null>(null)
@@ -184,10 +239,10 @@ function ListEditor({
             key={idx}
             className="flex items-center gap-2 rounded-xl bg-gray-50 px-3 py-2"
           >
-            {/* Index badge */}
+            {/* Index badge — uses the item's own color when colors are enabled */}
             <span
               className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
-              style={{ backgroundColor: accent }}
+              style={{ backgroundColor: itemColors?.[item] ?? accent }}
             >
               {idx + 1}
             </span>
@@ -230,6 +285,21 @@ function ListEditor({
               /* ── Read mode ─────────────────────────────────────────── */
               <>
                 <span className="flex-1 text-sm font-medium text-gray-900">{item}</span>
+                {/* Color picker */}
+                {itemColors && onItemColorChange && (
+                  <label
+                    className="relative h-6 w-6 shrink-0 cursor-pointer overflow-hidden rounded-lg border border-gray-200 transition-transform hover:scale-110"
+                    style={{ backgroundColor: itemColors[item] ?? accent }}
+                    title={`Change color for ${item}`}
+                  >
+                    <input
+                      type="color"
+                      className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                      value={itemColors[item] ?? accent}
+                      onChange={(e) => onItemColorChange(item, e.target.value)}
+                    />
+                  </label>
+                )}
                 {/* Edit */}
                 <button
                   onClick={() => startEdit(idx)}

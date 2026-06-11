@@ -64,7 +64,10 @@ function DashboardAnalytics({
       const opps = opportunities.filter(
         (o) => (o.owner as string)?.toLowerCase() === name.toLowerCase(),
       )
-      const forecast = opps.reduce((s, o) => s + toUSD(o.value ?? 0, (o as any).currency), 0)
+      // Forecast excludes lost deals so marking a deal as Loss is reflected here.
+      const forecast = opps
+        .filter((o) => o.stage !== 'Loss')
+        .reduce((s, o) => s + toUSD(o.value ?? 0, (o as any).currency), 0)
       const closed   = opps
         .filter((o) => o.stage === 'Win')
         .reduce((s, o) => s + toUSD((o as any).final_win_value || o.value || 0, (o as any).currency), 0)
@@ -77,15 +80,13 @@ function DashboardAnalytics({
   )
 
   // Scope-level KPI scalars — single pass over opportunities.
-  const { scopeTarget, closedValue, totalForecast, gapToTarget, globalPct } = useMemo(() => {
+  const { scopeTarget, closedValue, gapToTarget, globalPct } = useMemo(() => {
     const scopeTarget   = isHoS ? overallTarget : (managerTargets[viewAs] ?? 0)
-    const totalForecast = opportunities.reduce((s, o) => s + toUSD(o.value ?? 0, (o as any).currency), 0)
     const closedValue   = opportunities
       .filter((o) => o.stage === 'Win')
       .reduce((s, o) => s + toUSD((o as any).final_win_value || o.value || 0, (o as any).currency), 0)
     return {
       scopeTarget,
-      totalForecast,
       closedValue,
       gapToTarget: scopeTarget - closedValue,
       globalPct:   scopeTarget > 0 ? Math.min(Math.round((closedValue / scopeTarget) * 100), 100) : 0,

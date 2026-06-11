@@ -45,7 +45,7 @@ export default function ManagersTab({
     const opps     = opportunities.filter(
       (o) => (o.owner as string)?.toLowerCase() === name.toLowerCase(),
     )
-    const forecast = opps.reduce((s, o) => s + (o.value ?? 0), 0)
+    const forecast = opps.filter((o) => o.stage !== 'Loss').reduce((s, o) => s + (o.value ?? 0), 0)
     const closed   = opps.filter((o) => o.stage === 'Win').reduce((s, o) => s + ((o as any).final_win_value ?? o.value ?? 0), 0)
     const open     = opps.filter((o) => !['Win', 'Loss'].includes(o.stage)).reduce((s, o) => s + (o.value ?? 0), 0)
     const target   = managerTargets[name] ?? 0

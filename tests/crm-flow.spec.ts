@@ -85,8 +85,9 @@ async function setupAuthMocks(page: Page): Promise<void> {
  * This is a reliable signal that auth passed and the Dashboard component mounted.
  */
 async function waitForDashboard(page: Page): Promise<void> {
+  // The brand name renders as text inside the header's logo button.
   await expect(
-    page.getByRole('heading', { name: 'Over-Sat CRM' }),
+    page.getByRole('banner').getByText('Over-Sat CRM'),
   ).toBeVisible({ timeout: 20_000 })
 }
 
@@ -219,8 +220,9 @@ test.describe('CRM main flows', () => {
     await waitForDashboard(page)
 
     // ── Step 1: Navigate to Pipeline and open the Add Opportunity modal ────
+    // The header CTA renders the text "New" with title "New Opportunity".
     await goToPipeline(page)
-    await page.getByRole('button', { name: /new opportunity/i }).click()
+    await page.getByTitle('New Opportunity').click()
 
     // ── Step 2: Fill in the two required fields (Name + Account) and save ──
     await page.locator('input[placeholder="Opportunity name…"]').fill(STUB_OPP_NAME)
@@ -229,45 +231,25 @@ test.describe('CRM main flows', () => {
     // The Save button is enabled once both required fields are non-empty.
     await page.getByRole('button', { name: /^save$/i }).click()
 
-    // Wait for the success state: "Saved" badge appears and the tabs unlock.
-    // This confirms the mocked INSERT responded and the component handled it.
-    await expect(
-      page.locator('text=Saved'),
-    ).toBeVisible({ timeout: 8_000 })
-
-    // ── Step 3: Close the Add Opportunity modal ────────────────────────────
-    // Clicking the backdrop (at the viewport corner, well outside the centred
-    // modal card) triggers the backdrop's onClick={onClose} handler.
-    await page.mouse.click(10, 10)
-
-    // ── Step 4: Click on the newly added row to open the view / edit modal ─
-    // PipelineTab prepends new rows so our stub is always first; filtering by
-    // text ensures we never accidentally click a pre-existing row.
-    const newRow = page
-      .getByRole('row')
-      .filter({ hasText: STUB_OPP_NAME })
-      .first()
-    await expect(newRow).toBeVisible({ timeout: 5_000 })
-    await newRow.click()
-
-    // ── Step 5: Enter edit mode ───────────────────────────────────────────
-    await page.getByRole('button', { name: 'Edit' }).click()
-
-    // Confirm edit mode: Save & Close button is now visible.
+    // ── Step 3: After saving, the add form hands off to the full edit modal.
+    // Its "Save & Close" button confirms the mocked INSERT responded and the
+    // component switched into edit mode.
     const saveAndClose = page.getByRole('button', { name: /save & close/i })
-    await expect(saveAndClose).toBeVisible()
+    await expect(saveAndClose).toBeVisible({ timeout: 8_000 })
 
-    // ── Step 6: Select the Loss stage pill ───────────────────────────────
-    // In edit mode the Details tab body renders five stage pill buttons
-    // (Discovery, Proposal, Negotiation, Win, Loss).  There are no other
-    // buttons labelled "Loss" on the page at this point.
+    // ── Step 4: Select the Loss stage pill ───────────────────────────────
+    // The edit modal header renders five stage pill buttons (Discovery,
+    // Proposal, Negotiation, Win, Loss). There are no other buttons labelled
+    // "Loss" on the page at this point.
     await page.getByRole('button', { name: 'Loss' }).click()
 
-    // ── Step 7: Assert the Loss validation section appeared ───────────────
+    // ── Step 5: Assert the Loss validation section appeared ───────────────
     // Both field labels must be visible — they are rendered only when
     // isEditing && draft.stage === 'Loss'.
-    await expect(page.getByText('Loss Reason')).toBeVisible()
-    await expect(page.getByText('Loss Description')).toBeVisible()
+    // exact: true — the "Loss Reason and Loss Description are required."
+    // validation banner also contains these substrings.
+    await expect(page.getByText('Loss Reason', { exact: true })).toBeVisible()
+    await expect(page.getByText('Loss Description', { exact: true })).toBeVisible()
 
     // The Loss Reason select must have its placeholder option visible,
     // confirming the <select> rendered (not just the label).
@@ -280,7 +262,7 @@ test.describe('CRM main flows', () => {
     await expect(lossDescTextarea).toBeVisible()
     await expect(lossDescTextarea).toBeEditable()
 
-    // ── Step 8: Validate the save-guard ──────────────────────────────────
+    // ── Step 6: Validate the save-guard ──────────────────────────────────
     // canSave is false when isLost && (loss_reason | loss_description) is empty.
     // The button must be disabled until both fields are filled in.
     await expect(saveAndClose).toBeDisabled()

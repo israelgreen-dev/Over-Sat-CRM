@@ -3,13 +3,14 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { toUSD } from '@/lib/currency'
-import { type Opportunity } from './OpportunitiesTable'
+import { type Opportunity, DEFAULT_PROBABILITY } from './OpportunitiesTable'
 import DashboardAnalytics, { MANAGER_TARGETS } from './DashboardAnalytics'
 import ManagersTab from './ManagersTab'
 import PipelineTab from './PipelineTab'
 import SettingsTab from './SettingsTab'
 import AnalyticsTab from './AnalyticsTab'
 import TargetsTab, { type QuarterlyData, type ProductTargetRow } from './TargetsTab'
+import ProjectionTab from './ProjectionTab'
 import UsersTab from './UsersTab'
 import ErrorBoundary from './ErrorBoundary'
 import LoginScreen from './LoginScreen'
@@ -25,7 +26,7 @@ const DEFAULT_PRODUCTS = ['Python5', 'Python7', 'Mantis10', 'Rigel', 'Griffin', 
 const COLOR_PALETTE    = ['#3b82f6','#10b981','#f59e0b','#8b5cf6','#ef4444','#06b6d4','#f97316','#ec4899','#84cc16','#6366f1']
 const CURRENT_YEAR     = String(new Date().getFullYear())
 
-type Tab = 'Dashboard' | 'Sales Managers' | 'Pipeline' | 'Analytics' | 'Targets' | 'Settings'
+type Tab = 'Dashboard' | 'Sales Managers' | 'Pipeline' | 'Analytics' | 'Projection' | 'Targets' | 'Settings'
 
 type UserProfile = {
   id: string
@@ -45,6 +46,8 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
   // ── Auth state ────────────────────────────────────────────────────────────
   const [authLoading, setAuthLoading] = useState(true)
   const [profile, setProfile]         = useState<UserProfile | null>(null)
+  // Declared before the auth effect below, which sets it when a session loads.
+  const [viewAs, setViewAs]           = useState<string>(HEAD_OF_SALES)
 
   useEffect(() => {
     async function loadProfile(userId: string, email: string, metadata: Record<string, string>) {
@@ -85,7 +88,6 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
   const isAdmin      = profile?.role === 'admin'
   const isLockedView = profile?.role === 'manager' || profile?.role === 'partner'
 
-  const [viewAs, setViewAs]           = useState<string>(HEAD_OF_SALES)
   const [activeTab, setActiveTab]     = useState<Tab>('Dashboard')
   const [addFormOpen, setAddFormOpen] = useState(false)
   const [viewerOpen, setViewerOpen]   = useState(false)
@@ -122,6 +124,10 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
   const [products, setProducts]       = useState<string[]>(DEFAULT_PRODUCTS)
   const [headOfSales, setHeadOfSales] = useState<string>(MANAGER_NAMES[0] ?? '')
   const [partners, setPartners]       = useState<string[]>([])
+  const [probabilityDefaults, setProbabilityDefaults] = useState<Record<string, number>>({ ...DEFAULT_PROBABILITY })
+  // Explicit per-manager color picks from Settings; managers without a pick
+  // fall back to the palette (by list position) in the managerColors memo.
+  const [managerColorOverrides, setManagerColorOverrides] = useState<Record<string, string>>({})
 
   // ── Year selector ─────────────────────────────────────────────────────────
   const [selectedYear, setSelectedYear] = useState<string>(CURRENT_YEAR)
@@ -168,6 +174,8 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
       }
       if (s.quarterlyTargetsByYear)  setQuarterlyTargetsByYear(s.quarterlyTargetsByYear)
       if (s.productTargetRowsByYear) setProductTargetRowsByYear(s.productTargetRowsByYear)
+      if (s.probabilityDefaults)     setProbabilityDefaults({ ...DEFAULT_PROBABILITY, ...s.probabilityDefaults })
+      if (s.managerColors)           setManagerColorOverrides(s.managerColors)
       setSettingsLoaded(true)
     })
   }, [])
@@ -183,8 +191,10 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
       targetsByYear,
       quarterlyTargetsByYear,
       productTargetRowsByYear,
+      probabilityDefaults,
+      managerColors: managerColorOverrides,
     })
-  }, [settingsLoaded, managers, products, headOfSales, partners, targetsByYear, quarterlyTargetsByYear, productTargetRowsByYear])
+  }, [settingsLoaded, managers, products, headOfSales, partners, targetsByYear, quarterlyTargetsByYear, productTargetRowsByYear, probabilityDefaults, managerColorOverrides])
 
   const overallTarget = useMemo(
     () => Object.values(managerTargets).reduce((s, v) => s + v, 0),
@@ -246,21 +256,25 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
 
   const managerColors = useMemo(
     () => Object.fromEntries(
-      managers.map((n, i) => [n, COLOR_PALETTE[i % COLOR_PALETTE.length]]),
+      managers.map((n, i) => [n, managerColorOverrides[n] ?? COLOR_PALETTE[i % COLOR_PALETTE.length]]),
     ),
-    [managers],
+    [managers, managerColorOverrides],
   )
+
+  const handleManagerColorChange = useCallback((name: string, color: string) => {
+    setManagerColorOverrides((prev) => ({ ...prev, [name]: color }))
+  }, [])
 
   const tabs = useMemo<Tab[]>(
     () => isAdmin && isHoS
-      ? ['Dashboard', 'Sales Managers', 'Pipeline', 'Analytics', 'Targets', 'Settings']
+      ? ['Dashboard', 'Sales Managers', 'Pipeline', 'Analytics', 'Projection', 'Targets', 'Settings']
       : isAdmin && !isHoS
-      ? ['Dashboard', 'Pipeline', 'Analytics', 'Targets']
+      ? ['Dashboard', 'Pipeline', 'Analytics', 'Projection', 'Targets']
       : isHoS
-      ? ['Dashboard', 'Sales Managers', 'Pipeline', 'Analytics', 'Targets', 'Settings']
+      ? ['Dashboard', 'Sales Managers', 'Pipeline', 'Analytics', 'Projection', 'Targets', 'Settings']
       : isPartner
-      ? ['Dashboard', 'Sales Managers', 'Pipeline', 'Analytics']
-      : ['Dashboard', 'Pipeline', 'Analytics'],
+      ? ['Dashboard', 'Sales Managers', 'Pipeline', 'Analytics', 'Projection']
+      : ['Dashboard', 'Pipeline', 'Analytics', 'Projection'],
     [isAdmin, isHoS, isPartner],
   )
   const safeTab: Tab = tabs.includes(activeTab) ? activeTab : 'Dashboard'
@@ -292,8 +306,12 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
   )
 
   // ── Banner metrics ────────────────────────────────────────────────────────
+  // Forecast excludes lost deals — a deal marked Loss must drop out of the
+  // forecast immediately, otherwise the banner/charts never reflect the loss.
   const { totalForecast, closedOrders, openPipeline } = useMemo(() => ({
-    totalForecast: visibleOpps.reduce((s, o) => s + toUSD(o.value ?? 0, (o as any).currency), 0),
+    totalForecast: visibleOpps
+      .filter((o) => o.stage !== 'Loss')
+      .reduce((s, o) => s + toUSD(o.value ?? 0, (o as any).currency), 0),
     closedOrders:  visibleOpps
       .filter((o) => o.stage === 'Win')
       .reduce((s, o) => s + toUSD((o as any).final_win_value || o.value || 0, (o as any).currency), 0),
@@ -598,6 +616,7 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
               managerColors={managerColors}
               defaultOwner={managers.find((m) => m.toLowerCase() === (profile?.name ?? '').toLowerCase()) ?? managers.find((m) => (profile?.name ?? '').toLowerCase().endsWith(m.toLowerCase())) ?? profile?.name ?? ''}
               isAdmin={isAdmin}
+              probabilityDefaults={probabilityDefaults}
               onOppUpdated={handleOppUpdated}
               onOppAdded={handleOppAdded}
               onOppDeleted={handleOppDeleted}
@@ -635,10 +654,14 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
               products={products}
               headOfSales={headOfSales}
               partners={partners}
+              managerColors={managerColors}
+              probabilityDefaults={probabilityDefaults}
               onManagersChange={handleManagersChange}
               onProductsChange={setProducts}
               onHeadOfSalesChange={setHeadOfSales}
               onPartnersChange={setPartners}
+              onManagerColorChange={handleManagerColorChange}
+              onProbabilityDefaultsChange={setProbabilityDefaults}
             />
             {/* ── User & Password Management ───────────────────────────── */}
             <div>
@@ -654,6 +677,15 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
           </div>
         )}
 
+        {safeTab === 'Projection' && (
+          /* Cross-year by design: the 8-quarter horizon spans multiple years,
+             so the header's year selector intentionally doesn't apply here. */
+          <ProjectionTab
+            opportunities={allVisibleOpps}
+            probabilityDefaults={probabilityDefaults}
+          />
+        )}
+
         {safeTab === 'Analytics' && (
           <AnalyticsTab
             opportunities={visibleOpps}
@@ -663,6 +695,7 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
             selectedYear={selectedYear}
             availableYears={availableYears}
             onYearChange={setSelectedYear}
+            probabilityDefaults={probabilityDefaults}
           />
         )}
 

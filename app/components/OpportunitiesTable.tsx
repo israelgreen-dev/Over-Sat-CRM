@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
-import { toUSD } from '@/lib/currency'
 
 export type Opportunity = {
   id: string | number
@@ -32,21 +31,24 @@ type Draft = {
   loss_reason: string
   loss_description: string
   probability: number | null
+  quarterly_incomes: Record<string, number>
 }
 
-// Default probability by stage (used when probability is not explicitly set)
+// Default probability by stage (used when probability is not explicitly set).
+// These are the factory values — the admin can override them in Settings,
+// in which case the overrides are passed down as the `defaults` argument.
 export const DEFAULT_PROBABILITY: Record<string, number> = {
   Discovery: 10, Proposal: 25, Negotiation: 60, Win: 100, Loss: 0,
 }
 
-export function effectiveProbability(o: Opportunity): number {
+export function effectiveProbability(o: Opportunity, defaults: Record<string, number> = DEFAULT_PROBABILITY): number {
   const p = (o as any).probability
   if (p !== null && p !== undefined) return Number(p)
-  return DEFAULT_PROBABILITY[o.stage] ?? 0
+  return defaults[o.stage] ?? 0
 }
 
-export function weightedValue(o: Opportunity): number {
-  return ((o.value ?? 0) * effectiveProbability(o)) / 100
+export function weightedValue(o: Opportunity, defaults: Record<string, number> = DEFAULT_PROBABILITY): number {
+  return ((o.value ?? 0) * effectiveProbability(o, defaults)) / 100
 }
 
 type Note = {
@@ -58,7 +60,7 @@ type Note = {
 
 const STAGES = ['Discovery', 'Proposal', 'Negotiation', 'Win', 'Loss']
 
-function generateQuarters(count = 8): string[] {
+export function generateQuarters(count = 8): string[] {
   const now   = new Date()
   const year  = now.getFullYear()
   const currentQ = Math.floor(now.getMonth() / 3) + 1
@@ -167,6 +169,7 @@ export function Modal({
   isAdmin,
   products: productsProp,
   managers: managersProp,
+  probabilityDefaults = DEFAULT_PROBABILITY,
 }: {
   opportunity: Opportunity
   onClose: () => void
@@ -175,12 +178,16 @@ export function Modal({
   isAdmin?: boolean
   products?: string[]
   managers?: string[]
+  probabilityDefaults?: Record<string, number>
 }) {
   const [modalTab, setModalTab] = useState<'details' | 'notes' | 'documents' | 'contacts'>('details')
   const [draft, setDraft]       = useState<Draft>(toDraft(opportunity))
   const [saving, setSaving]     = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
+  // Quarterly income entry mode: absolute amounts or % of the deal value.
+  // Amounts remain the stored source of truth either way.
+  const [qiMode, setQiMode]     = useState<'amount' | 'percent'>('amount')
 
   async function handleDelete() {
     if (!confirm(`Permanently delete "${opportunity.name}"? This cannot be undone.`)) return
@@ -221,19 +228,21 @@ export function Modal({
       loss_reason:       isLost ? draft.loss_reason : null,
       loss_description:  isLost ? draft.loss_description : null,
       probability:       draft.probability,
+      quarterly_incomes: draft.quarterly_incomes,
     }
 
     // Progressive fallback: strip columns that don't exist in older DB schemas.
-    let payload: Record<string, unknown> = { ...base }
+    const payload: Record<string, unknown> = { ...base }
     let sbError: { message: string } | null = null
 
-    for (let attempt = 0; attempt < 4; attempt++) {
+    for (let attempt = 0; attempt < 5; attempt++) {
       const { error } = await supabase.from('opportunities').update(payload).eq('id', opportunity.id)
       sbError = error
       if (!error) break
-      if (error.message?.includes('probability'))     { const { probability,     ...rest } = payload; payload = rest; continue }
-      if (error.message?.includes('final_win_value')) { const { final_win_value, ...rest } = payload; payload = rest; continue }
-      if (error.message?.includes('currency'))        { const { currency,        ...rest } = payload; payload = rest; continue }
+      if (error.message?.includes('quarterly_incomes')) { delete payload.quarterly_incomes; continue }
+      if (error.message?.includes('probability'))       { delete payload.probability;       continue }
+      if (error.message?.includes('final_win_value'))   { delete payload.final_win_value;   continue }
+      if (error.message?.includes('currency'))          { delete payload.currency;          continue }
       break
     }
 
@@ -434,7 +443,7 @@ export function Modal({
                       min="0"
                       max="100"
                       className={`${inputCls} w-24`}
-                      placeholder={String(DEFAULT_PROBABILITY[draft.stage] ?? 0)}
+                      placeholder={String(probabilityDefaults[draft.stage] ?? 0)}
                       value={draft.probability ?? ''}
                       onChange={(e) => {
                         const v = e.target.value === '' ? null : Math.min(100, Math.max(0, Number(e.target.value)))
@@ -443,7 +452,7 @@ export function Modal({
                     />
                     <span className="text-xs text-gray-400">
                       {draft.probability === null
-                        ? `Default: ${DEFAULT_PROBABILITY[draft.stage] ?? 0}% (by stage)`
+                        ? `Default: ${probabilityDefaults[draft.stage] ?? 0}% (by stage)`
                         : `Weighted: ${draft.value ? `$${Math.round((draft.value * (draft.probability ?? 0)) / 100).toLocaleString()}` : '—'}`}
                     </span>
                   </div>
@@ -460,6 +469,93 @@ export function Modal({
                   </Field>
                 )}
 
+              </div>
+
+              {/* ── Planned income by quarter (drives the Projection tab) ── */}
+              <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-4">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-3">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                      Planned Income by Quarter
+                    </p>
+                    {/* $ / % entry mode toggle */}
+                    <div className="inline-flex overflow-hidden rounded-lg border border-zinc-200 bg-white">
+                      {(['amount', 'percent'] as const).map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => setQiMode(mode)}
+                          disabled={mode === 'percent' && !draft.value}
+                          title={mode === 'percent' && !draft.value ? 'Set a deal Value first to use %' : undefined}
+                          className={`px-2.5 py-1 text-xs font-bold transition-colors ${
+                            qiMode === mode
+                              ? 'bg-indigo-600 text-white'
+                              : 'text-zinc-500 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40'
+                          }`}
+                        >
+                          {mode === 'amount' ? '$' : '%'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <QuarterlyAllocationSummary
+                    quarterlyIncomes={draft.quarterly_incomes}
+                    dealValue={draft.value}
+                  />
+                </div>
+                <AllocationBar
+                  quarterlyIncomes={draft.quarterly_incomes}
+                  dealValue={draft.value}
+                />
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {QUARTERS.map((q) => (
+                    <div key={q}>
+                      <p className="mb-1 text-[11px] font-semibold text-zinc-400">{q}</p>
+                      {qiMode === 'amount' ? (
+                        <NumericInput
+                          className={inputCls}
+                          placeholder="0"
+                          value={draft.quarterly_incomes[q] ?? null}
+                          onChange={(v) => setDraft((d) => {
+                            const qi = { ...d.quarterly_incomes }
+                            if (v == null) delete qi[q]
+                            else qi[q] = clampToRemaining(v, d, q)
+                            return { ...d, quarterly_incomes: qi }
+                          })}
+                        />
+                      ) : (
+                        <>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="any"
+                              className={`${inputCls} pr-7`}
+                              placeholder="0"
+                              value={pctOfValue(draft.quarterly_incomes[q], draft.value)}
+                              onChange={(e) => setDraft((d) => {
+                                const qi = { ...d.quarterly_incomes }
+                                if (e.target.value === '') {
+                                  delete qi[q]
+                                } else {
+                                  const pct = Math.min(100, Math.max(0, Number(e.target.value)))
+                                  qi[q] = clampToRemaining(Math.round(((d.value ?? 0) * pct) / 100), d, q)
+                                }
+                                return { ...d, quarterly_incomes: qi }
+                              })}
+                            />
+                            <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-xs text-zinc-400">%</span>
+                          </div>
+                          {/* Resulting amount out of the deal value */}
+                          <p className={`mt-1 text-[11px] tabular-nums ${draft.quarterly_incomes[q] ? 'font-semibold text-indigo-600' : 'text-zinc-300'}`}>
+                            = ${(draft.quarterly_incomes[q] ?? 0).toLocaleString('en-US')}
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
 
               {isLost && (
@@ -507,6 +603,7 @@ export function AddOpportunityModal({
   products: productsProp,
   managers: managersProp,
   defaultOwner = '',
+  probabilityDefaults = DEFAULT_PROBABILITY,
 }: {
   onClose: () => void
   onAdded: (opp: Opportunity) => void
@@ -514,6 +611,7 @@ export function AddOpportunityModal({
   products?: string[]
   managers?: string[]
   defaultOwner?: string
+  probabilityDefaults?: Record<string, number>
 }) {
   const [form, setForm] = useState({
     name: '', customer_name: '', country: '', owner: defaultOwner,
@@ -552,7 +650,7 @@ export function AddOpportunityModal({
     }
 
     // Progressive fallback: strip columns that don't exist in older DB schemas.
-    let payload: Record<string, unknown> = { ...base }
+    const payload: Record<string, unknown> = { ...base }
     let data: any[] | null = null
     let sbError: { message: string } | null = null
 
@@ -562,8 +660,8 @@ export function AddOpportunityModal({
       if (!res.error) break
       // Strip unsupported columns one at a time and retry.
       // Note: final_win_value is not sent on INSERT so that branch is omitted here.
-      if (res.error.message?.includes('probability')) { const { probability, ...rest } = payload; payload = rest; continue }
-      if (res.error.message?.includes('currency'))    { const { currency,    ...rest } = payload; payload = rest; continue }
+      if (res.error.message?.includes('probability')) { delete payload.probability; continue }
+      if (res.error.message?.includes('currency'))    { delete payload.currency;    continue }
       break
     }
 
@@ -612,6 +710,7 @@ export function AddOpportunityModal({
         }}
         products={productsProp}
         managers={managersProp}
+        probabilityDefaults={probabilityDefaults}
       />
     )
   }
@@ -791,7 +890,7 @@ export function AddOpportunityModal({
                   <input
                     type="number" min="0" max="100"
                     className={`${inputCls} w-24`}
-                    placeholder={String(DEFAULT_PROBABILITY[form.stage] ?? 0)}
+                    placeholder={String(probabilityDefaults[form.stage] ?? 0)}
                     value={form.probability ?? ''}
                     onChange={(e) => {
                       const v = e.target.value === '' ? null : Math.min(100, Math.max(0, Number(e.target.value)))
@@ -799,7 +898,7 @@ export function AddOpportunityModal({
                     }}
                   />
                   <span className="text-xs text-gray-400">
-                    Default: {DEFAULT_PROBABILITY[form.stage] ?? 0}% by stage
+                    Default: {probabilityDefaults[form.stage] ?? 0}% by stage
                   </span>
                 </div>
               </Field>
@@ -839,6 +938,7 @@ function toDraft(opp: Opportunity): Draft {
     loss_reason: opp.loss_reason ?? '',
     loss_description: opp.loss_description ?? '',
     probability: (opp as any).probability ?? null,
+    quarterly_incomes: ((opp as any).quarterly_incomes as Record<string, number>) ?? {},
   }
 }
 
@@ -1235,12 +1335,81 @@ function DocumentsPanel({ opportunityId }: { opportunityId: string }) {
   )
 }
 
-function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+// The stored quarterly amount expressed as a % of the deal value, for the
+// percent entry mode. Returns '' for empty so the input shows its placeholder.
+function pctOfValue(amount: number | undefined, dealValue: number | null): string {
+  if (amount == null || !dealValue) return ''
+  return String(Math.round((amount / dealValue) * 1000) / 10)
+}
+
+// Caps a quarter's amount so the total allocation never exceeds the deal value.
+// Without a deal value there is nothing to cap against.
+function clampToRemaining(requested: number, draft: Draft, quarter: string): number {
+  if (draft.value == null) return requested
+  const allocatedToOthers = Object.entries(draft.quarterly_incomes)
+    .filter(([q]) => q !== quarter)
+    .reduce((s, [, n]) => s + (n || 0), 0)
+  return Math.max(0, Math.min(requested, draft.value - allocatedToOthers))
+}
+
+// Visual allocation gauge: indigo while under-allocated, green at exactly
+// 100%, red when legacy data exceeds the (possibly lowered) deal value.
+function AllocationBar({
+  quarterlyIncomes,
+  dealValue,
+}: {
+  quarterlyIncomes: Record<string, number>
+  dealValue: number | null
+}) {
+  if (!dealValue) return null
+  const allocated = Object.values(quarterlyIncomes).reduce((s, n) => s + (n || 0), 0)
+  const pct  = (allocated / dealValue) * 100
+  const over = pct > 100.5
+  const full = !over && pct > 99.5
   return (
-    <div className="flex gap-4">
-      <dt className="w-36 shrink-0 text-sm font-medium text-zinc-500">{label}</dt>
-      <dd className="flex-1 text-sm text-zinc-800">{value}</dd>
+    <div className="mb-3 flex items-center gap-2">
+      <div className="h-2 flex-1 overflow-hidden rounded-full bg-zinc-200/70">
+        <div
+          className="h-full rounded-full transition-all duration-300"
+          style={{
+            width: `${Math.min(pct, 100)}%`,
+            backgroundColor: over ? '#ef4444' : full ? '#10b981' : '#6366f1',
+          }}
+        />
+      </div>
+      <span
+        className={`w-12 shrink-0 text-right text-[11px] font-bold tabular-nums ${
+          over ? 'text-red-500' : full ? 'text-emerald-600' : 'text-indigo-600'
+        }`}
+      >
+        {Math.round(pct)}%
+      </span>
     </div>
+  )
+}
+
+// Shows how much of the deal value has been spread across quarters,
+// turning amber when the allocation doesn't match the deal value.
+function QuarterlyAllocationSummary({
+  quarterlyIncomes,
+  dealValue,
+}: {
+  quarterlyIncomes: Record<string, number>
+  dealValue: number | null
+}) {
+  const allocated = Object.values(quarterlyIncomes).reduce((s, n) => s + (n || 0), 0)
+  if (allocated === 0) {
+    return <span className="text-xs text-zinc-400">Spread the deal value over the quarters below</span>
+  }
+  const matches = dealValue == null || allocated === dealValue
+  const pct     = dealValue ? Math.round((allocated / dealValue) * 100) : null
+  return (
+    <span className={`text-xs font-medium ${matches ? 'text-zinc-500' : 'text-amber-600'}`}>
+      Allocated: ${allocated.toLocaleString('en-US')}
+      {dealValue != null && ` of $${dealValue.toLocaleString('en-US')}`}
+      {pct != null && ` (${pct}%)`}
+      {!matches && ' ⚠'}
+    </span>
   )
 }
 
@@ -1422,21 +1591,9 @@ function StageBadge({ stage }: { stage: string }) {
   )
 }
 
-const _usdFmt = new Intl.NumberFormat('en-US', {
-  style: 'currency', currency: 'USD', maximumFractionDigits: 0,
-})
-
-function formatCurrency(value: number, currency = 'USD') {
-  return _usdFmt.format(toUSD(value, currency))
-}
-
 function formatTimestamp(ts: string) {
   const d = new Date(ts)
   return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
     + ' · '
     + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
-}
-
-function toLabel(key: string) {
-  return key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }

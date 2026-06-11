@@ -67,6 +67,7 @@ export default function AnalyticsTab({
   selectedYear,
   availableYears = [],
   onYearChange,
+  probabilityDefaults,
 }: {
   opportunities: Opportunity[]
   managers: string[]
@@ -75,6 +76,7 @@ export default function AnalyticsTab({
   selectedYear: string
   availableYears?: string[]
   onYearChange?: (year: string) => void
+  probabilityDefaults?: Record<string, number>
 }) {
   const [selectedQuarter, setSelectedQuarter] = useState<string>('')
 
@@ -95,7 +97,8 @@ export default function AnalyticsTab({
 
   const totalPipeline  = active.reduce((s, o) => s + pipeVal(o), 0)
   const totalWin       = wins.reduce((s, o) => s + winVal(o), 0)
-  const totalForecast  = opps.reduce((s, o) => s + pipeVal(o), 0)
+  // Forecast excludes lost deals so marking a deal as Loss is reflected here.
+  const totalForecast  = opps.filter((o) => o.stage !== 'Loss').reduce((s, o) => s + pipeVal(o), 0)
   const totalLostValue = losses.reduce((s, o) => s + pipeVal(o), 0)
   const overallTarget  = Object.values(managerTargets).reduce((s, v) => s + v, 0)
   const achievementPct = pct(totalWin, overallTarget)
@@ -114,7 +117,7 @@ export default function AnalyticsTab({
   const maxStageVal = Math.max(...stageData.map((d) => d.value), 1)
 
   // Weighted pipeline
-  const weightedPipeline = active.reduce((s, o) => s + (pipeVal(o) * effectiveProbability(o)) / 100, 0)
+  const weightedPipeline = active.reduce((s, o) => s + (pipeVal(o) * effectiveProbability(o, probabilityDefaults)) / 100, 0)
 
   // Funnel (by value)
   const funnelStages = ['Discovery', 'Proposal', 'Negotiation', 'Win']
@@ -154,7 +157,8 @@ export default function AnalyticsTab({
   opps.forEach((o) => {
     const q = (o as any).close_date || 'No Date'
     if (!qtrMap[q]) qtrMap[q] = { pipeline: 0, win: 0, count: 0 }
-    qtrMap[q].count++; qtrMap[q].pipeline += pipeVal(o)
+    qtrMap[q].count++
+    if (o.stage !== 'Loss') qtrMap[q].pipeline += pipeVal(o) // lost deals leave the pipeline
     if (o.stage === 'Win') qtrMap[q].win += winVal(o)
   })
   const qtrData = Object.entries(qtrMap).map(([quarter, d]) => ({ quarter, ...d })).sort((a, b) => a.quarter.localeCompare(b.quarter))
@@ -257,7 +261,7 @@ export default function AnalyticsTab({
         <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <KPI label="Total Lost"       value={fmtShort(totalLostValue)} sub={`${losses.length} deals`}  color="text-red-500" />
           <KPI label="Avg. Loss Value"  value={fmtShort(avgLoss)}         sub="per lost deal"            color="text-red-500" />
-          <KPI label="Total Forecast"   value={fmtShort(totalForecast)}   sub="all deals incl. active" />
+          <KPI label="Total Forecast"   value={fmtShort(totalForecast)}   sub="open + won, excl. lost" />
           <KPI label="Opportunities"    value={String(opps.length)}        sub={`${active.length} active · ${wins.length} won · ${losses.length} lost`} />
         </div>
       </Section>

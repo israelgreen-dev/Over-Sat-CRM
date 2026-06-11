@@ -34,6 +34,8 @@ export type CRMSettings = {
   targetsByYear:              Record<string, Record<string, number>>
   quarterlyTargetsByYear:     Record<string, Record<string, QuarterlyData>>
   productTargetRowsByYear:    Record<string, Record<string, ProductTargetRow[]>>
+  probabilityDefaults:        Record<string, number>
+  managerColors:              Record<string, string>
 }
 
 // ── localStorage keys ─────────────────────────────────────────────────────────
@@ -46,6 +48,8 @@ const LS = {
   targetsByYear:           'oversat_crm_targets_by_year',
   quarterlyTargetsByYear:  'oversat_crm_quarterly_targets_by_year',
   productTargetRowsByYear: 'oversat_crm_product_target_rows_by_year',
+  probabilityDefaults:     'oversat_crm_probability_defaults',
+  managerColors:           'oversat_crm_manager_colors',
   legacyTargets:           'oversat_crm_manager_targets', // v1 key — migration only
 } as const
 
@@ -61,6 +65,8 @@ function readLS(): Partial<CRMSettings> {
     const tby = localStorage.getItem(LS.targetsByYear);           if (tby) out.targetsByYear           = JSON.parse(tby)
     const qty = localStorage.getItem(LS.quarterlyTargetsByYear);  if (qty) out.quarterlyTargetsByYear  = JSON.parse(qty)
     const ptr = localStorage.getItem(LS.productTargetRowsByYear); if (ptr) out.productTargetRowsByYear = JSON.parse(ptr)
+    const pd  = localStorage.getItem(LS.probabilityDefaults);     if (pd)  out.probabilityDefaults     = JSON.parse(pd)
+    const mc  = localStorage.getItem(LS.managerColors);           if (mc)  out.managerColors           = JSON.parse(mc)
     return out
   } catch {
     return {}
@@ -76,6 +82,8 @@ function writeLS(s: Partial<CRMSettings>): void {
     if (s.targetsByYear           !== undefined) localStorage.setItem(LS.targetsByYear,           JSON.stringify(s.targetsByYear))
     if (s.quarterlyTargetsByYear  !== undefined) localStorage.setItem(LS.quarterlyTargetsByYear,  JSON.stringify(s.quarterlyTargetsByYear))
     if (s.productTargetRowsByYear !== undefined) localStorage.setItem(LS.productTargetRowsByYear, JSON.stringify(s.productTargetRowsByYear))
+    if (s.probabilityDefaults     !== undefined) localStorage.setItem(LS.probabilityDefaults,     JSON.stringify(s.probabilityDefaults))
+    if (s.managerColors           !== undefined) localStorage.setItem(LS.managerColors,           JSON.stringify(s.managerColors))
   } catch {
     // Ignore quota errors
   }
@@ -107,6 +115,8 @@ export async function loadSettings(): Promise<Partial<CRMSettings>> {
       targetsByYear:           data.targets_by_year            ?? ls.targetsByYear,
       quarterlyTargetsByYear:  data.quarterly_targets_by_year  ?? ls.quarterlyTargetsByYear,
       productTargetRowsByYear: data.product_target_rows_by_year ?? ls.productTargetRowsByYear,
+      probabilityDefaults:     data.probability_defaults        ?? ls.probabilityDefaults,
+      managerColors:           data.manager_colors              ?? ls.managerColors,
     }
 
     writeLS(remote) // Refresh local cache from Supabase
@@ -133,8 +143,20 @@ export async function saveSettings(s: Partial<CRMSettings>): Promise<void> {
     if (s.targetsByYear           !== undefined) row.targets_by_year             = s.targetsByYear
     if (s.quarterlyTargetsByYear  !== undefined) row.quarterly_targets_by_year   = s.quarterlyTargetsByYear
     if (s.productTargetRowsByYear !== undefined) row.product_target_rows_by_year = s.productTargetRowsByYear
+    if (s.probabilityDefaults     !== undefined) row.probability_defaults        = s.probabilityDefaults
+    if (s.managerColors           !== undefined) row.manager_colors              = s.managerColors
 
-    await supabase.from('crm_settings').upsert(row)
+    // Progressive fallback: strip columns missing from older DB schemas
+    // (migration 002 adds probability_defaults / manager_colors) so one
+    // unknown column doesn't block the rest of the settings from syncing.
+    const payload = { ...row }
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const { error } = await supabase.from('crm_settings').upsert(payload)
+      if (!error) break
+      if (error.message?.includes('probability_defaults')) { delete payload.probability_defaults; continue }
+      if (error.message?.includes('manager_colors'))       { delete payload.manager_colors;       continue }
+      break
+    }
   } catch {
     // Background sync failure is non-fatal; localStorage already updated
   }
