@@ -25,6 +25,9 @@ const MANAGER_NAMES    = Object.keys(MANAGER_TARGETS)
 const DEFAULT_PRODUCTS = ['Python5', 'Python7', 'Mantis10', 'Rigel', 'Griffin', 'Scorpion', 'Cameleon']
 const COLOR_PALETTE    = ['#3b82f6','#10b981','#f59e0b','#8b5cf6','#ef4444','#06b6d4','#f97316','#ec4899','#84cc16','#6366f1']
 const CURRENT_YEAR     = String(new Date().getFullYear())
+// Sentinel year value: shows opportunities across every year and aggregates
+// per-year targets. Used by the header year selector and Analytics.
+const ALL_YEARS        = 'All Years'
 
 type Tab = 'Dashboard' | 'Sales Managers' | 'Pipeline' | 'Analytics' | 'Projection' | 'Targets' | 'Settings'
 
@@ -128,6 +131,8 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
   // Explicit per-manager color picks from Settings; managers without a pick
   // fall back to the palette (by list position) in the managerColors memo.
   const [managerColorOverrides, setManagerColorOverrides] = useState<Record<string, string>>({})
+  // Free-text territory per manager (keyed by manager name).
+  const [managerTerritories, setManagerTerritories] = useState<Record<string, string>>({})
 
   // ── Year selector ─────────────────────────────────────────────────────────
   const [selectedYear, setSelectedYear] = useState<string>(CURRENT_YEAR)
@@ -144,10 +149,17 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
   const [productTargetRowsByYear, setProductTargetRowsByYear] = useState<Record<string, Record<string, ProductTargetRow[]>>>({})
 
   // Stable reference: only creates a new object when selectedYear or targetsByYear changes.
-  const managerTargets = useMemo(
-    () => targetsByYear[selectedYear] ?? {},
-    [targetsByYear, selectedYear],
-  )
+  // For "All Years" we sum each manager's target across every year.
+  const managerTargets = useMemo(() => {
+    if (selectedYear === ALL_YEARS) {
+      const agg: Record<string, number> = {}
+      for (const yearMap of Object.values(targetsByYear)) {
+        for (const [m, v] of Object.entries(yearMap)) agg[m] = (agg[m] ?? 0) + v
+      }
+      return agg
+    }
+    return targetsByYear[selectedYear] ?? {}
+  }, [targetsByYear, selectedYear])
 
   const setManagerTargets = useCallback(
     (v: Record<string, number>) =>
@@ -176,6 +188,7 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
       if (s.productTargetRowsByYear) setProductTargetRowsByYear(s.productTargetRowsByYear)
       if (s.probabilityDefaults)     setProbabilityDefaults({ ...DEFAULT_PROBABILITY, ...s.probabilityDefaults })
       if (s.managerColors)           setManagerColorOverrides(s.managerColors)
+      if (s.managerTerritories)      setManagerTerritories(s.managerTerritories)
       setSettingsLoaded(true)
     })
   }, [])
@@ -193,8 +206,9 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
       productTargetRowsByYear,
       probabilityDefaults,
       managerColors: managerColorOverrides,
+      managerTerritories,
     })
-  }, [settingsLoaded, managers, products, headOfSales, partners, targetsByYear, quarterlyTargetsByYear, productTargetRowsByYear, probabilityDefaults, managerColorOverrides])
+  }, [settingsLoaded, managers, products, headOfSales, partners, targetsByYear, quarterlyTargetsByYear, productTargetRowsByYear, probabilityDefaults, managerColorOverrides, managerTerritories])
 
   const overallTarget = useMemo(
     () => Object.values(managerTargets).reduce((s, v) => s + v, 0),
@@ -202,10 +216,20 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
   )
 
   // ── Quarterly targets for selected year ──────────────────────────────────
-  const quarterlyTargets = useMemo(
-    () => quarterlyTargetsByYear[selectedYear] ?? {},
-    [quarterlyTargetsByYear, selectedYear],
-  )
+  // For "All Years" we sum each manager's quarterly split across every year.
+  const quarterlyTargets = useMemo(() => {
+    if (selectedYear === ALL_YEARS) {
+      const agg: Record<string, QuarterlyData> = {}
+      for (const yearMap of Object.values(quarterlyTargetsByYear)) {
+        for (const [m, q] of Object.entries(yearMap)) {
+          const cur = agg[m] ?? { q1: 0, q2: 0, q3: 0, q4: 0 }
+          agg[m] = { q1: cur.q1 + q.q1, q2: cur.q2 + q.q2, q3: cur.q3 + q.q3, q4: cur.q4 + q.q4 }
+        }
+      }
+      return agg
+    }
+    return quarterlyTargetsByYear[selectedYear] ?? {}
+  }, [quarterlyTargetsByYear, selectedYear])
   const setQuarterlyTargets = useCallback(
     (v: Record<string, QuarterlyData>) =>
       setQuarterlyTargetsByYear((prev) => ({ ...prev, [selectedYear]: v })),
@@ -241,12 +265,13 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
         .map((o) => ((o as any).close_date ?? '').match(/\d{4}/)?.[0])
         .filter(Boolean) as string[],
     ))
-    return Array.from(new Set([
+    const years = Array.from(new Set([
       ...yearsFromData,
       CURRENT_YEAR,
       String(Number(CURRENT_YEAR) + 1),
       String(Number(CURRENT_YEAR) + 2),
     ])).sort()
+    return [ALL_YEARS, ...years]
   }, [liveOpps])
 
   // ── Role-derived flags ────────────────────────────────────────────────────
@@ -263,6 +288,10 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
 
   const handleManagerColorChange = useCallback((name: string, color: string) => {
     setManagerColorOverrides((prev) => ({ ...prev, [name]: color }))
+  }, [])
+
+  const handleManagerTerritoryChange = useCallback((name: string, territory: string) => {
+    setManagerTerritories((prev) => ({ ...prev, [name]: territory }))
   }, [])
 
   const tabs = useMemo<Tab[]>(
@@ -283,6 +312,7 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
   // Year filter applies to Analytics/Dashboard; Pipeline always shows all opps.
   const yearFilteredOpps = useMemo(
     () => liveOpps.filter((o) => {
+      if (selectedYear === ALL_YEARS) return true
       const cd = (o as any).close_date ?? ''
       return !cd || cd.includes(selectedYear)
     }),
@@ -625,6 +655,11 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
         )}
 
         {safeTab === 'Targets' && (isHoS || isAdmin) && (
+          selectedYear === ALL_YEARS ? (
+            <div className="rounded-2xl border border-gray-100 bg-white px-5 py-12 text-center text-sm text-gray-400 shadow-sm">
+              Targets are set per year. Select a specific year from the header to view or edit targets.
+            </div>
+          ) : (
           <TargetsTab
             managers={
               isAdmin && !isHoS
@@ -636,7 +671,7 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
             quarterlyTargets={quarterlyTargets}
             onQuarterlyTargetsChange={setQuarterlyTargets}
             selectedYear={selectedYear}
-            availableYears={availableYears}
+            availableYears={availableYears.filter((y) => y !== ALL_YEARS)}
             onCopyTargetsToYear={(toYear) =>
               setTargetsByYear((prev) => ({ ...prev, [toYear]: { ...(prev[selectedYear] ?? {}) } }))
             }
@@ -645,6 +680,7 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
             onProductTargetRowsByManagerChange={setProductTargetRowsByManager}
             readOnly={isAdmin && !isHoS}
           />
+          )
         )}
 
         {safeTab === 'Settings' && (isHoS || isAdmin) && (
@@ -655,12 +691,14 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
               headOfSales={headOfSales}
               partners={partners}
               managerColors={managerColors}
+              managerTerritories={managerTerritories}
               probabilityDefaults={probabilityDefaults}
               onManagersChange={handleManagersChange}
               onProductsChange={setProducts}
               onHeadOfSalesChange={setHeadOfSales}
               onPartnersChange={setPartners}
               onManagerColorChange={handleManagerColorChange}
+              onManagerTerritoryChange={handleManagerTerritoryChange}
               onProbabilityDefaultsChange={setProbabilityDefaults}
             />
             {/* ── User & Password Management ───────────────────────────── */}
@@ -691,6 +729,7 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
             opportunities={visibleOpps}
             managers={isAdmin && !isHoS ? [viewAs] : allManagers}
             managerTargets={isAdmin && !isHoS ? { [viewAs]: managerTargets[viewAs] ?? 0 } : managerTargets}
+            quarterlyTargets={quarterlyTargets}
             managerColors={managerColors}
             selectedYear={selectedYear}
             availableYears={availableYears}

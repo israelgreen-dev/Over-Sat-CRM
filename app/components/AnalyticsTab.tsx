@@ -63,6 +63,7 @@ export default function AnalyticsTab({
   opportunities,
   managers,
   managerTargets,
+  quarterlyTargets = {},
   managerColors,
   selectedYear,
   availableYears = [],
@@ -72,6 +73,7 @@ export default function AnalyticsTab({
   opportunities: Opportunity[]
   managers: string[]
   managerTargets: Record<string, number>
+  quarterlyTargets?: Record<string, { q1: number; q2: number; q3: number; q4: number }>
   managerColors: Record<string, string>
   selectedYear: string
   availableYears?: string[]
@@ -82,6 +84,9 @@ export default function AnalyticsTab({
 
   const opps = useMemo(() => {
     if (!selectedQuarter) return opportunities
+    if (selectedQuarter === 'No Date') {
+      return opportunities.filter((o) => !(o as any).close_date)
+    }
     const q = QUARTERS.find((q) => q.label === selectedQuarter)
     if (!q) return opportunities
     return opportunities.filter((o) => {
@@ -184,6 +189,30 @@ export default function AnalyticsTab({
 
   const barData = mgrData.map((m) => ({ name: m.name, Target: m.target, Win: m.winAmt, Pipeline: m.pipeline }))
 
+  // ── Planned vs Actual ──────────────────────────────────────────────────────
+  // Planned = target/quota, Actual = won value. Two views: per manager and per
+  // quarter (with a "No Date" bucket for wins that have no close date).
+  const planVsActualByManager = mgrData.map((m) => ({ name: m.name, Planned: m.target, Actual: m.winAmt }))
+
+  const qPlanned = { Q1: 0, Q2: 0, Q3: 0, Q4: 0 }
+  Object.values(quarterlyTargets).forEach((q) => {
+    qPlanned.Q1 += q.q1; qPlanned.Q2 += q.q2; qPlanned.Q3 += q.q3; qPlanned.Q4 += q.q4
+  })
+  const qActual: Record<string, number> = { Q1: 0, Q2: 0, Q3: 0, Q4: 0, 'No Date': 0 }
+  wins.forEach((o) => {
+    const cd = (o as any).close_date as string | undefined
+    if (!cd) { qActual['No Date'] += winVal(o); return }
+    const month = new Date(cd).getMonth() + 1
+    const q = QUARTERS.find((qq) => qq.months.includes(month))
+    if (q) qActual[q.label] += winVal(o)
+  })
+  const planVsActualByQuarter = ['Q1', 'Q2', 'Q3', 'Q4', 'No Date'].map((label) => ({
+    quarter: label,
+    Planned: (qPlanned as Record<string, number>)[label] ?? 0,
+    Actual: qActual[label],
+  }))
+  const hasPlanVsActual = planVsActualByManager.some((m) => m.Planned > 0 || m.Actual > 0)
+
   return (
     <div className="space-y-6">
 
@@ -235,6 +264,16 @@ export default function AnalyticsTab({
               {label}
             </button>
           ))}
+          <button
+            onClick={() => setSelectedQuarter(selectedQuarter === 'No Date' ? '' : 'No Date')}
+            className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+              selectedQuarter === 'No Date'
+                ? 'bg-slate-500 text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            No Date
+          </button>
         </div>
       </div>
 
@@ -310,6 +349,41 @@ export default function AnalyticsTab({
 
         <Section title="Sales Funnel" subtitle="Pipeline value and deal count per stage">
           {opps.length === 0 ? <Empty /> : <SalesFunnel data={funnelData} />}
+        </Section>
+      </div>
+
+      {/* ── Planned vs Actual ─────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Section title="Planned vs Actual — by Manager" subtitle="Planned (target quota) vs actual won value per manager">
+          {!hasPlanVsActual ? <Empty /> : (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={planVsActualByManager} barGap={4} barCategoryGap="30%">
+                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+                <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#374151', fontWeight: 600 }} axisLine={false} tickLine={false} />
+                <YAxis tickFormatter={fmtShort} tick={{ fontSize: 11, fill: '#6b7280' }} axisLine={false} tickLine={false} width={56} />
+                <Tooltip formatter={(v) => fmtFull(Number(v))} contentStyle={{ borderRadius: 8, fontSize: 12 }} />
+                <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
+                <Bar dataKey="Planned" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Actual"  fill="#10b981" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </Section>
+
+        <Section title="Planned vs Actual — by Quarter" subtitle="Quarterly planned target vs actual won value (incl. undated wins)">
+          {!hasPlanVsActual ? <Empty /> : (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={planVsActualByQuarter} barGap={4} barCategoryGap="30%">
+                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+                <XAxis dataKey="quarter" tick={{ fontSize: 11, fill: '#374151', fontWeight: 600 }} axisLine={false} tickLine={false} />
+                <YAxis tickFormatter={fmtShort} tick={{ fontSize: 11, fill: '#6b7280' }} axisLine={false} tickLine={false} width={56} />
+                <Tooltip formatter={(v) => fmtFull(Number(v))} contentStyle={{ borderRadius: 8, fontSize: 12 }} />
+                <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
+                <Bar dataKey="Planned" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Actual"  fill="#10b981" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </Section>
       </div>
 
