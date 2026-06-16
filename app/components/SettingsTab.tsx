@@ -194,6 +194,8 @@ function ListEditor({
   const [newItem, setNewItem]     = useState('')
   const [editingIdx, setEditingIdx] = useState<number | null>(null)
   const [editingVal, setEditingVal] = useState('')
+  // Direction the next click of the sort button will apply (toggles each click).
+  const [sortAsc, setSortAsc]     = useState(true)
 
   function add() {
     const val = newItem.trim()
@@ -210,8 +212,9 @@ function ListEditor({
     onChange(next)
   }
 
-  function sortAZ() {
-    onChange([...items].sort((a, b) => a.localeCompare(b)))
+  function toggleSort() {
+    onChange([...items].sort((a, b) => (sortAsc ? a.localeCompare(b) : b.localeCompare(a))))
+    setSortAsc((v) => !v)
   }
 
   function remove(idx: number) {
@@ -245,14 +248,16 @@ function ListEditor({
         <h3 className="text-sm font-bold text-gray-900">{title}</h3>
         {items.length > 1 && (
           <button
-            onClick={sortAZ}
-            title="Sort A–Z"
+            onClick={toggleSort}
+            title={sortAsc ? 'Sort A–Z' : 'Sort Z–A'}
             className="ml-auto flex items-center gap-1 rounded-lg px-2 py-0.5 text-xs font-semibold text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
           >
             <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h13M3 8h9M3 12h5m4 6l3 3m0 0l3-3m-3 3V4" />
+              {sortAsc
+                ? <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h13M3 8h9M3 12h5m4 6l3 3m0 0l3-3m-3 3V4" />
+                : <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h5M3 8h9M3 12h13m4-8l3-3m0 0l3 3m-3-3v18" />}
             </svg>
-            A–Z
+            {sortAsc ? 'A–Z' : 'Z–A'}
           </button>
         )}
         <span className={`${items.length > 1 ? '' : 'ml-auto'} rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500`}>

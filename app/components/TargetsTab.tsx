@@ -179,11 +179,11 @@ export default function TargetsTab({
                   <tr className="border-b border-gray-50 bg-white">
                     <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-400 min-w-[150px]">Product</th>
                     <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-400 min-w-[180px]">Description</th>
-                    <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 min-w-[120px]">Unit Price</th>
+                    <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 min-w-[120px]">Unit Price ($)</th>
                     <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 min-w-[72px]">Qty</th>
-                    <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wider text-blue-500 min-w-[110px]">Total Price</th>
+                    <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wider text-blue-500 min-w-[110px]">Total Price ($)</th>
                     <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wider text-purple-500 min-w-[110px]">Probability</th>
-                    <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wider text-emerald-600 min-w-[120px]">Weighted Price</th>
+                    <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wider text-emerald-600 min-w-[120px]">Weighted Price ($)</th>
                     <th className="w-9" />
                   </tr>
                 </thead>
