@@ -14,12 +14,14 @@ export default function SettingsTab({
   headOfSales,
   partners,
   managerColors,
+  managerTerritories,
   probabilityDefaults,
   onManagersChange,
   onProductsChange,
   onHeadOfSalesChange,
   onPartnersChange,
   onManagerColorChange,
+  onManagerTerritoryChange,
   onProbabilityDefaultsChange,
 }: {
   managers: string[]
@@ -27,12 +29,14 @@ export default function SettingsTab({
   headOfSales: string
   partners: string[]
   managerColors: Record<string, string>
+  managerTerritories: Record<string, string>
   probabilityDefaults: Record<string, number>
   onManagersChange: (v: string[]) => void
   onProductsChange: (v: string[]) => void
   onHeadOfSalesChange: (v: string) => void
   onPartnersChange: (v: string[]) => void
   onManagerColorChange: (name: string, color: string) => void
+  onManagerTerritoryChange: (name: string, territory: string) => void
   onProbabilityDefaultsChange: (v: Record<string, number>) => void
 }) {
   const [hosEditing, setHosEditing] = useState(false)
@@ -133,13 +137,15 @@ export default function SettingsTab({
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
         <ListEditor
           title="Sales Managers"
-          description="Names available in the Owner field on all opportunities. Pick a color for each manager — it is used in all charts and analytics."
+          description="Names available in the Owner field on all opportunities. Pick a color for each manager — it is used in all charts and analytics. Reorder with the arrows or sort A–Z."
           items={managers}
           onChange={onManagersChange}
           placeholder="e.g. David"
           accent="#3b82f6"
           itemColors={managerColors}
           onItemColorChange={onManagerColorChange}
+          itemTerritories={managerTerritories}
+          onItemTerritoryChange={onManagerTerritoryChange}
         />
         <ListEditor
           title="Products"
@@ -171,6 +177,8 @@ function ListEditor({
   accent,
   itemColors,
   onItemColorChange,
+  itemTerritories,
+  onItemTerritoryChange,
 }: {
   title: string
   description: string
@@ -180,16 +188,33 @@ function ListEditor({
   accent: string
   itemColors?: Record<string, string>
   onItemColorChange?: (item: string, color: string) => void
+  itemTerritories?: Record<string, string>
+  onItemTerritoryChange?: (item: string, territory: string) => void
 }) {
   const [newItem, setNewItem]     = useState('')
   const [editingIdx, setEditingIdx] = useState<number | null>(null)
   const [editingVal, setEditingVal] = useState('')
+  // Direction the next click of the sort button will apply (toggles each click).
+  const [sortAsc, setSortAsc]     = useState(true)
 
   function add() {
     const val = newItem.trim()
     if (!val || items.map((i) => i.toLowerCase()).includes(val.toLowerCase())) return
     onChange([...items, val])
     setNewItem('')
+  }
+
+  function move(idx: number, dir: -1 | 1) {
+    const target = idx + dir
+    if (target < 0 || target >= items.length) return
+    const next = [...items]
+    ;[next[idx], next[target]] = [next[target], next[idx]]
+    onChange(next)
+  }
+
+  function toggleSort() {
+    onChange([...items].sort((a, b) => (sortAsc ? a.localeCompare(b) : b.localeCompare(a))))
+    setSortAsc((v) => !v)
   }
 
   function remove(idx: number) {
@@ -221,7 +246,21 @@ function ListEditor({
       <div className="mb-1 flex items-center gap-2">
         <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: accent }} />
         <h3 className="text-sm font-bold text-gray-900">{title}</h3>
-        <span className="ml-auto rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">
+        {items.length > 1 && (
+          <button
+            onClick={toggleSort}
+            title={sortAsc ? 'Sort A–Z' : 'Sort Z–A'}
+            className="ml-auto flex items-center gap-1 rounded-lg px-2 py-0.5 text-xs font-semibold text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              {sortAsc
+                ? <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h13M3 8h9M3 12h5m4 6l3 3m0 0l3-3m-3 3V4" />
+                : <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h5M3 8h9M3 12h13m4-8l3-3m0 0l3 3m-3-3v18" />}
+            </svg>
+            {sortAsc ? 'A–Z' : 'Z–A'}
+          </button>
+        )}
+        <span className={`${items.length > 1 ? '' : 'ml-auto'} rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500`}>
           {items.length}
         </span>
       </div>
@@ -237,8 +276,9 @@ function ListEditor({
         {items.map((item, idx) => (
           <li
             key={idx}
-            className="flex items-center gap-2 rounded-xl bg-gray-50 px-3 py-2"
+            className="rounded-xl bg-gray-50 px-3 py-2"
           >
+            <div className="flex items-center gap-2">
             {/* Index badge — uses the item's own color when colors are enabled */}
             <span
               className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
@@ -285,6 +325,29 @@ function ListEditor({
               /* ── Read mode ─────────────────────────────────────────── */
               <>
                 <span className="flex-1 text-sm font-medium text-gray-900">{item}</span>
+                {/* Reorder up / down */}
+                <div className="flex shrink-0 flex-col">
+                  <button
+                    onClick={() => move(idx, -1)}
+                    disabled={idx === 0}
+                    className="rounded p-0.5 text-gray-300 transition-colors hover:bg-gray-200 hover:text-gray-600 disabled:opacity-30 disabled:hover:bg-transparent"
+                    title="Move up"
+                  >
+                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => move(idx, 1)}
+                    disabled={idx === items.length - 1}
+                    className="rounded p-0.5 text-gray-300 transition-colors hover:bg-gray-200 hover:text-gray-600 disabled:opacity-30 disabled:hover:bg-transparent"
+                    title="Move down"
+                  >
+                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                </div>
                 {/* Color picker */}
                 {itemColors && onItemColorChange && (
                   <label
@@ -321,6 +384,24 @@ function ListEditor({
                   </svg>
                 </button>
               </>
+            )}
+            </div>
+
+            {/* Territory — free text, only when enabled (Sales Managers) */}
+            {itemTerritories && onItemTerritoryChange && editingIdx !== idx && (
+              <div className="mt-2 flex items-center gap-2 pl-8">
+                <svg className="h-3.5 w-3.5 shrink-0 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                <input
+                  type="text"
+                  placeholder="Territory (e.g. EMEA, West Coast)…"
+                  value={itemTerritories[item] ?? ''}
+                  onChange={(e) => onItemTerritoryChange(item, e.target.value)}
+                  className="flex-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 placeholder-gray-400 focus:border-blue-400 focus:outline-none transition-colors"
+                />
+              </div>
             )}
           </li>
         ))}

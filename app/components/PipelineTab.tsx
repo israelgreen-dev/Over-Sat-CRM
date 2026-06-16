@@ -105,7 +105,14 @@ export default function PipelineTab({
   const [sortDir, setSortDir]                 = useState<SortDir>('asc')
   const searchRef                             = useRef<HTMLInputElement>(null)
 
-  const productOptions = Array.from(new Set(opportunities.map((r) => (r.product as string) ?? '').filter(Boolean))).sort()
+  // Include every product configured in Settings plus any ad-hoc products
+  // present on existing opportunities — so the shortcuts/dropdown aren't
+  // limited to products that already appear on a deal. Settings order is
+  // preserved (no alphabetical sort), with ad-hoc products appended after.
+  const productOptions = Array.from(new Set([
+    ...(products ?? []),
+    ...opportunities.map((r) => (r.product as string) ?? '').filter(Boolean),
+  ]))
   const stageOptions   = Object.keys(STAGE_COLORS)
   const statusOptions  = Array.from(new Set(opportunities.map((r) => (r as any).status ?? '').filter(Boolean))).sort()
 

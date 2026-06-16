@@ -11,6 +11,7 @@ export type ProductTargetRow = {
   price: number
   quantity: number
   probability: number
+  description?: string
 }
 
 const fmt = (n: number) =>
@@ -30,7 +31,7 @@ const qInputCls =
   'w-full rounded-lg border border-amber-100 bg-amber-50 px-2 py-1.5 text-sm text-center font-medium text-gray-900 focus:border-amber-400 focus:bg-white focus:outline-none transition-colors'
 
 function newRow(): ProductTargetRow {
-  return { id: Math.random().toString(36).slice(2), product: '', price: 0, quantity: 1, probability: 100 }
+  return { id: Math.random().toString(36).slice(2), product: '', price: 0, quantity: 1, probability: 100, description: '' }
 }
 
 function computeWeighted(rows: ProductTargetRow[]) {
@@ -177,11 +178,12 @@ export default function TargetsTab({
                 <thead>
                   <tr className="border-b border-gray-50 bg-white">
                     <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-400 min-w-[150px]">Product</th>
-                    <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 min-w-[120px]">Unit Price</th>
+                    <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-400 min-w-[180px]">Description</th>
+                    <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 min-w-[120px]">Unit Price ($)</th>
                     <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 min-w-[72px]">Qty</th>
-                    <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wider text-blue-500 min-w-[110px]">Total Price</th>
+                    <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wider text-blue-500 min-w-[110px]">Total Price ($)</th>
                     <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wider text-purple-500 min-w-[110px]">Probability</th>
-                    <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wider text-emerald-600 min-w-[120px]">Weighted Price</th>
+                    <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wider text-emerald-600 min-w-[120px]">Weighted Price ($)</th>
                     <th className="w-9" />
                   </tr>
                 </thead>
@@ -202,6 +204,18 @@ export default function TargetsTab({
                                 <option value="">Select product…</option>
                                 {products.map((p) => <option key={p} value={p}>{p}</option>)}
                               </select>
+                          }
+                        </td>
+                        <td className="px-3 py-2">
+                          {readOnly
+                            ? <span className="text-sm text-gray-600">{row.description || '—'}</span>
+                            : <input
+                                type="text"
+                                value={row.description ?? ''}
+                                onChange={(e) => updateRow(name, row.id, 'description', e.target.value)}
+                                placeholder="Add a note…"
+                                className="w-full rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-400 focus:bg-white focus:outline-none transition-colors"
+                              />
                           }
                         </td>
                         <td className="px-3 py-2">
@@ -248,7 +262,7 @@ export default function TargetsTab({
 
                   {rows.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="px-4 py-5 text-center text-xs text-gray-400">
+                      <td colSpan={8} className="px-4 py-5 text-center text-xs text-gray-400">
                         No products yet — click "+ Add Product" below.
                       </td>
                     </tr>
@@ -256,7 +270,7 @@ export default function TargetsTab({
 
                   {rows.length > 0 && (
                     <tr className="border-t-2 border-gray-100 bg-slate-50 font-bold">
-                      <td className="px-4 py-2.5 text-xs uppercase tracking-wider text-gray-400" colSpan={3}>Total</td>
+                      <td className="px-4 py-2.5 text-xs uppercase tracking-wider text-gray-400" colSpan={4}>Total</td>
                       <td className="px-3 py-2.5 text-center text-blue-600">{fmt(totalPrice)}</td>
                       <td />
                       <td className="px-3 py-2.5 text-center text-emerald-700">{fmt(annualTarget)}</td>

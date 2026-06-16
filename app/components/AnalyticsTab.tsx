@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell, Legend,
+  LineChart, Line,
 } from 'recharts'
 import { type Opportunity, effectiveProbability } from './OpportunitiesTable'
 
@@ -17,6 +18,16 @@ function fmtFull(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
 }
 function winVal(o: Opportunity) { return (o as any).final_win_value || o.value || 0 }
+// close_date is stored as a quarter string ("Q1-2026"), not a calendar date.
+// Parse the quarter label from it, falling back to a real date if one is given.
+function quarterLabel(cd: string | null | undefined): 'Q1' | 'Q2' | 'Q3' | 'Q4' | null {
+  if (!cd) return null
+  const m = String(cd).match(/Q([1-4])/i)
+  if (m) return `Q${m[1]}` as 'Q1' | 'Q2' | 'Q3' | 'Q4'
+  const d = new Date(cd)
+  if (!Number.isNaN(d.getTime())) return `Q${Math.floor(d.getMonth() / 3) + 1}` as 'Q1' | 'Q2' | 'Q3' | 'Q4'
+  return null
+}
 function pipeVal(o: Opportunity) { return o.value ?? 0 }
 function pct(num: number, den: number) { return den > 0 ? Math.round((num / den) * 100) : 0 }
 
@@ -63,6 +74,7 @@ export default function AnalyticsTab({
   opportunities,
   managers,
   managerTargets,
+  quarterlyTargets = {},
   managerColors,
   selectedYear,
   availableYears = [],
@@ -72,6 +84,7 @@ export default function AnalyticsTab({
   opportunities: Opportunity[]
   managers: string[]
   managerTargets: Record<string, number>
+  quarterlyTargets?: Record<string, { q1: number; q2: number; q3: number; q4: number }>
   managerColors: Record<string, string>
   selectedYear: string
   availableYears?: string[]
@@ -82,14 +95,10 @@ export default function AnalyticsTab({
 
   const opps = useMemo(() => {
     if (!selectedQuarter) return opportunities
-    const q = QUARTERS.find((q) => q.label === selectedQuarter)
-    if (!q) return opportunities
-    return opportunities.filter((o) => {
-      const cd = (o as any).close_date as string | undefined
-      if (!cd) return false
-      const month = new Date(cd).getMonth() + 1
-      return q.months.includes(month)
-    })
+    if (selectedQuarter === 'No Date') {
+      return opportunities.filter((o) => !(o as any).close_date)
+    }
+    return opportunities.filter((o) => quarterLabel((o as any).close_date) === selectedQuarter)
   }, [opportunities, selectedQuarter])
   const wins   = opps.filter((o) => o.stage === 'Win')
   const losses = opps.filter((o) => o.stage === 'Loss')
@@ -184,6 +193,29 @@ export default function AnalyticsTab({
 
   const barData = mgrData.map((m) => ({ name: m.name, Target: m.target, Win: m.winAmt, Pipeline: m.pipeline }))
 
+  // ── Planned vs Actual ──────────────────────────────────────────────────────
+  // Planned = target/quota, Actual = won value. Two views: per manager and per
+  // quarter (with a "No Date" bucket for wins that have no close date).
+  const planVsActualByManager = mgrData.map((m) => ({ name: m.name, Planned: m.target, Actual: m.winAmt }))
+
+  const qPlanned = { Q1: 0, Q2: 0, Q3: 0, Q4: 0 }
+  Object.values(quarterlyTargets).forEach((q) => {
+    qPlanned.Q1 += q.q1; qPlanned.Q2 += q.q2; qPlanned.Q3 += q.q3; qPlanned.Q4 += q.q4
+  })
+  const qActual: Record<string, number> = { Q1: 0, Q2: 0, Q3: 0, Q4: 0, 'No Date': 0 }
+  wins.forEach((o) => {
+    const ql = quarterLabel((o as any).close_date)
+    qActual[ql ?? 'No Date'] += winVal(o)
+  })
+  const planVsActualByQuarter = ['Q1', 'Q2', 'Q3', 'Q4', 'No Date'].map((label) => ({
+    quarter: label,
+    Planned: (qPlanned as Record<string, number>)[label] ?? 0,
+    Actual: qActual[label],
+  }))
+  // Line/trend view: Q1–Q4 only (a "No Date" point would drag Planned to 0).
+  const planVsActualTrend = planVsActualByQuarter.filter((d) => d.quarter !== 'No Date')
+  const hasPlanVsActual = planVsActualByManager.some((m) => m.Planned > 0 || m.Actual > 0)
+
   return (
     <div className="space-y-6">
 
@@ -235,6 +267,16 @@ export default function AnalyticsTab({
               {label}
             </button>
           ))}
+          <button
+            onClick={() => setSelectedQuarter(selectedQuarter === 'No Date' ? '' : 'No Date')}
+            className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+              selectedQuarter === 'No Date'
+                ? 'bg-slate-500 text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            No Date
+          </button>
         </div>
       </div>
 
@@ -312,6 +354,58 @@ export default function AnalyticsTab({
           {opps.length === 0 ? <Empty /> : <SalesFunnel data={funnelData} />}
         </Section>
       </div>
+
+      {/* ── Planned vs Actual ─────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Section title="Planned vs Actual — by Manager" subtitle="Planned (target quota) vs actual won value per manager">
+          {!hasPlanVsActual ? <Empty /> : (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={planVsActualByManager} barGap={4} barCategoryGap="30%">
+                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+                <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#374151', fontWeight: 600 }} axisLine={false} tickLine={false} />
+                <YAxis tickFormatter={fmtShort} tick={{ fontSize: 11, fill: '#6b7280' }} axisLine={false} tickLine={false} width={56} />
+                <Tooltip formatter={(v) => fmtFull(Number(v))} contentStyle={{ borderRadius: 8, fontSize: 12 }} />
+                <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
+                <Bar dataKey="Planned" name="Planned (Target)" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Actual"  name="Actual (Won)"    fill="#10b981" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </Section>
+
+        <Section title="Planned vs Actual — by Quarter" subtitle="Quarterly planned target vs actual won value (incl. undated wins)">
+          {!hasPlanVsActual ? <Empty /> : (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={planVsActualByQuarter} barGap={4} barCategoryGap="30%">
+                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+                <XAxis dataKey="quarter" tick={{ fontSize: 11, fill: '#374151', fontWeight: 600 }} axisLine={false} tickLine={false} />
+                <YAxis tickFormatter={fmtShort} tick={{ fontSize: 11, fill: '#6b7280' }} axisLine={false} tickLine={false} width={56} />
+                <Tooltip formatter={(v) => fmtFull(Number(v))} contentStyle={{ borderRadius: 8, fontSize: 12 }} />
+                <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
+                <Bar dataKey="Planned" name="Planned (Target)" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Actual"  name="Actual (Won)"    fill="#10b981" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </Section>
+      </div>
+
+      {/* ── Planned vs Actual — trend (line) ───────────────────────────────── */}
+      <Section title="Planned vs Actual — Quarterly Trend" subtitle="Planned target vs actual won value across Q1–Q4">
+        {!hasPlanVsActual ? <Empty /> : (
+          <ResponsiveContainer width="100%" height={280}>
+            <LineChart data={planVsActualTrend} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+              <XAxis dataKey="quarter" tick={{ fontSize: 11, fill: '#374151', fontWeight: 600 }} axisLine={false} tickLine={false} />
+              <YAxis tickFormatter={fmtShort} tick={{ fontSize: 11, fill: '#6b7280' }} axisLine={false} tickLine={false} width={56} />
+              <Tooltip formatter={(v) => fmtFull(Number(v))} contentStyle={{ borderRadius: 8, fontSize: 12 }} />
+              <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
+              <Line type="monotone" dataKey="Planned" name="Planned (Target)" stroke="#6366f1" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+              <Line type="monotone" dataKey="Actual"  name="Actual (Won)"    stroke="#10b981" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+      </Section>
 
       {/* ── Pipeline by Stage ─────────────────────────────────────────────── */}
       <Section title="Pipeline by Stage" subtitle="Value and count per stage">
