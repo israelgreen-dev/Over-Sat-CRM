@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react'
 import { type Opportunity, Modal, AddOpportunityModal, effectiveProbability, weightedValue } from './OpportunitiesTable'
 import { fmtUSD } from '@/lib/currency'
+import { supabase } from '@/lib/supabase'
 
 const STAGE_COLORS: Record<string, string> = {
   Discovery:   'bg-blue-100 text-blue-700',
@@ -76,7 +77,7 @@ export default function PipelineTab({
   managers,
   managerColors = {},
   defaultOwner = '',
-  isAdmin,
+  canDelete,
   probabilityDefaults,
   onOppUpdated,
   onOppAdded,
@@ -89,7 +90,7 @@ export default function PipelineTab({
   managers?: string[]
   managerColors?: Record<string, string>
   defaultOwner?: string
-  isAdmin?: boolean
+  canDelete?: boolean
   probabilityDefaults?: Record<string, number>
   onOppUpdated?: (updated: Opportunity) => void
   onOppAdded?: (newOpp: Opportunity) => void
@@ -103,6 +104,7 @@ export default function PipelineTab({
   const [filterStatus, setFilterStatus]       = useState<string>('')
   const [sortKey, setSortKey]                 = useState<string>('')
   const [sortDir, setSortDir]                 = useState<SortDir>('asc')
+  const [deletingId, setDeletingId]           = useState<string | number | null>(null)
   const searchRef                             = useRef<HTMLInputElement>(null)
 
   // Include every product configured in Settings plus any ad-hoc products
@@ -174,6 +176,20 @@ export default function PipelineTab({
   function handleDeleted(id: string | number) {
     setSelected(null)
     onOppDeleted?.(id)
+  }
+
+  // Quick delete straight from a table row (confirm → Supabase → live update).
+  // stopPropagation keeps the row click from also opening the detail modal.
+  async function handleRowDelete(e: React.MouseEvent, opp: Opportunity) {
+    e.stopPropagation()
+    if (deletingId != null) return
+    if (!confirm(`Permanently delete "${opp.name || 'this opportunity'}"? This cannot be undone.`)) return
+    setDeletingId(opp.id)
+    const { error } = await supabase.from('opportunities').delete().eq('id', opp.id)
+    setDeletingId(null)
+    if (error) { alert(`Delete failed: ${error.message}`); return }
+    if (selected?.id === opp.id) setSelected(null)
+    onOppDeleted?.(opp.id)
   }
 
   return (
@@ -355,12 +371,17 @@ export default function PipelineTab({
                   </th>
                 )
               })}
+              {canDelete && (
+                <th className="whitespace-nowrap px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  Actions
+                </th>
+              )}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 bg-white">
             {displayedRows.length === 0 ? (
               <tr>
-                <td colSpan={COLUMNS.length} className="px-4 py-12 text-center">
+                <td colSpan={COLUMNS.length + (canDelete ? 1 : 0)} className="px-4 py-12 text-center">
                   {anyFilterActive ? (
                     <div>
                       <p className="text-sm font-medium text-gray-500">No results for &quot;{filterText || [filterManager, filterProduct, filterStage, filterStatus].filter(Boolean).join(', ')}&quot;</p>
@@ -432,6 +453,29 @@ export default function PipelineTab({
                   <td className="whitespace-nowrap px-4 py-3 text-gray-600">
                     {(opp as any).status ?? '—'}
                   </td>
+                  {/* Actions — delete */}
+                  {canDelete && (
+                    <td className="whitespace-nowrap px-4 py-3 text-right">
+                      <button
+                        onClick={(e) => handleRowDelete(e, opp)}
+                        disabled={deletingId === opp.id}
+                        title="Delete opportunity"
+                        aria-label={`Delete ${opp.name ?? 'opportunity'}`}
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-gray-300 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {deletingId === opp.id ? (
+                          <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                          </svg>
+                        ) : (
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        )}
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))
             )}
@@ -445,7 +489,7 @@ export default function PipelineTab({
           onClose={() => setSelected(null)}
           onSaved={handleSaved}
           onDeleted={() => handleDeleted(selected.id)}
-          isAdmin={isAdmin}
+          canDelete={canDelete}
           products={products}
           managers={managers}
           probabilityDefaults={probabilityDefaults}

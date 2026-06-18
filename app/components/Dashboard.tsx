@@ -645,7 +645,7 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
               managers={isFullAccess ? managers : undefined}
               managerColors={managerColors}
               defaultOwner={managers.find((m) => m.toLowerCase() === (profile?.name ?? '').toLowerCase()) ?? managers.find((m) => (profile?.name ?? '').toLowerCase().endsWith(m.toLowerCase())) ?? profile?.name ?? ''}
-              isAdmin={isAdmin}
+              canDelete={isAdmin || isHoS}
               probabilityDefaults={probabilityDefaults}
               onOppUpdated={handleOppUpdated}
               onOppAdded={handleOppAdded}

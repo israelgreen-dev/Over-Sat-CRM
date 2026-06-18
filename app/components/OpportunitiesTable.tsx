@@ -166,7 +166,7 @@ export function Modal({
   onClose,
   onSaved,
   onDeleted,
-  isAdmin,
+  canDelete,
   products: productsProp,
   managers: managersProp,
   probabilityDefaults = DEFAULT_PROBABILITY,
@@ -175,7 +175,7 @@ export function Modal({
   onClose: () => void
   onSaved: (updated: Opportunity) => void
   onDeleted?: () => void
-  isAdmin?: boolean
+  canDelete?: boolean
   products?: string[]
   managers?: string[]
   probabilityDefaults?: Record<string, number>
@@ -298,11 +298,11 @@ export function Modal({
 
             {/* Buttons */}
             <div className="flex shrink-0 items-center gap-2">
-              {isAdmin && (
+              {canDelete && (
                 <button
                   onClick={handleDelete}
                   disabled={deleting || saving}
-                  title="Delete opportunity (Admin only)"
+                  title="Delete opportunity"
                   className="flex h-8 w-8 items-center justify-center rounded-lg text-red-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
