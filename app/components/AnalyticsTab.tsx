@@ -6,7 +6,7 @@ import {
   ResponsiveContainer, PieChart, Pie, Cell, Legend,
   LineChart, Line,
 } from 'recharts'
-import { type Opportunity, effectiveProbability } from './OpportunitiesTable'
+import { type Opportunity, effectiveProbability, getProductLines, lineTotal } from './OpportunitiesTable'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmtShort(n: number) {
@@ -142,12 +142,21 @@ export default function AnalyticsTab({
   const lossData = Object.entries(lossMap).map(([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count)
 
   // Product
+  // A deal can include several products; each product line is credited its own
+  // value. Win values scale to the actual won amount so product totals add up.
   const prodMap: Record<string, { count: number; value: number; winCount: number; winValue: number }> = {}
   opps.forEach((o) => {
-    const p = (o.product as string) || 'Unspecified'
-    if (!prodMap[p]) prodMap[p] = { count: 0, value: 0, winCount: 0, winValue: 0 }
-    prodMap[p].count++; prodMap[p].value += pipeVal(o)
-    if (o.stage === 'Win') { prodMap[p].winCount++; prodMap[p].winValue += winVal(o) }
+    const lines = getProductLines(o)
+    const list = lines.length > 0 ? lines : [{ id: '', product: 'Unspecified', price: pipeVal(o), quantity: 1 }]
+    const deal = pipeVal(o)
+    const winScale = o.stage === 'Win' && deal > 0 ? winVal(o) / deal : 0
+    for (const l of list) {
+      const p = l.product || 'Unspecified'
+      const lv = lineTotal(l)
+      if (!prodMap[p]) prodMap[p] = { count: 0, value: 0, winCount: 0, winValue: 0 }
+      prodMap[p].count++; prodMap[p].value += lv
+      if (o.stage === 'Win') { prodMap[p].winCount++; prodMap[p].winValue += lv * winScale }
+    }
   })
   const prodData = Object.entries(prodMap).map(([product, d]) => ({ product, ...d, winRate: pct(d.winCount, d.count) })).sort((a, b) => b.value - a.value)
 

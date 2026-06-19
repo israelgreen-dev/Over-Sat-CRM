@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { type Opportunity, Modal, AddOpportunityModal, effectiveProbability, weightedValue } from './OpportunitiesTable'
+import { type Opportunity, Modal, AddOpportunityModal, effectiveProbability, weightedValue, getProductLines } from './OpportunitiesTable'
 import { fmtUSD } from '@/lib/currency'
 import { supabase } from '@/lib/supabase'
 
@@ -113,7 +113,7 @@ export default function PipelineTab({
   // preserved (no alphabetical sort), with ad-hoc products appended after.
   const productOptions = Array.from(new Set([
     ...(products ?? []),
-    ...opportunities.map((r) => (r.product as string) ?? '').filter(Boolean),
+    ...opportunities.flatMap((r) => getProductLines(r).map((l) => l.product)).filter(Boolean),
   ]))
   const stageOptions   = Object.keys(STAGE_COLORS)
   const statusOptions  = Array.from(new Set(opportunities.map((r) => (r as any).status ?? '').filter(Boolean))).sort()
@@ -149,7 +149,7 @@ export default function PipelineTab({
       if (!hit) return false
     }
     if (filterManager && (r.owner   as string)?.toLowerCase() !== filterManager.toLowerCase()) return false
-    if (filterProduct && (r.product as string)?.toLowerCase() !== filterProduct.toLowerCase()) return false
+    if (filterProduct && !getProductLines(r).some((l) => l.product.toLowerCase() === filterProduct.toLowerCase())) return false
     if (filterStage   && r.stage?.toLowerCase() !== filterStage.toLowerCase())                 return false
     if (filterStatus  && ((r as any).status ?? '')?.toLowerCase() !== filterStatus.toLowerCase()) return false
     return true

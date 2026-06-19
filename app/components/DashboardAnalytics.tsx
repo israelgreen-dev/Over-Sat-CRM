@@ -112,7 +112,8 @@ function DashboardAnalytics({
   )
 
   const hosBarData   = useMemo(
-    () => managerRows.map((m) => ({ name: m.name, Target: m.target, Forecast: m.forecast, Win: m.closed })),
+    // Target shown is what's left to close — won deals reduce the target.
+    () => managerRows.map((m) => ({ name: m.name, Target: Math.max(0, m.target - m.closed), Forecast: m.forecast, Win: m.closed })),
     [managerRows],
   )
   const stageBarData = useMemo(
@@ -181,7 +182,7 @@ function DashboardAnalytics({
                 <YAxis tickFormatter={fmtShort} tick={{ fontSize: 11, fill: '#6b7280' }} axisLine={false} tickLine={false} width={52} />
                 <Tooltip formatter={(v) => fmtFull(Number(v))} contentStyle={{ borderRadius: 8, fontSize: 12 }} />
                 <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
-                <Bar dataKey="Target"   fill="#ef4444" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Target"   name="Target Left" fill="#ef4444" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="Forecast" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="Win"      fill="#10b981" radius={[4, 4, 0, 0]} />
               </BarChart>

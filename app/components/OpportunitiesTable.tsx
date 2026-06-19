@@ -23,6 +23,7 @@ type Draft = {
   stage: string
   status: string
   product: string
+  product_lines: ProductLine[]
   country: string
   currency: string
   value: number | null
@@ -51,6 +52,31 @@ export function weightedValue(o: Opportunity, defaults: Record<string, number> =
   return ((o.value ?? 0) * effectiveProbability(o, defaults)) / 100
 }
 
+// ── Product line items ──────────────────────────────────────────────────────
+// An opportunity can consist of several products, each with its own quantity
+// and unit price. The opportunity's `value` stays the sum of the line totals.
+export type ProductLine = { id: string; product: string; quantity: number; price: number }
+
+export function newProductLine(product = '', price = 0, quantity = 1): ProductLine {
+  return { id: Math.random().toString(36).slice(2), product, quantity: Math.max(1, quantity), price: Math.max(0, price) }
+}
+export function lineTotal(l: ProductLine): number { return (l.price || 0) * (l.quantity || 0) }
+export function linesTotal(lines: ProductLine[]): number { return lines.reduce((s, l) => s + lineTotal(l), 0) }
+
+// Read product lines off an opportunity, synthesizing a single line from the
+// legacy `product` + `value` for opportunities saved before multi-product.
+export function getProductLines(opp: Opportunity): ProductLine[] {
+  const raw = (opp as any).product_lines
+  if (Array.isArray(raw) && raw.length > 0) {
+    return raw.map((l: any) => newProductLine(l.product ?? '', Number(l.price) || 0, Number(l.quantity) || 1))
+  }
+  const p = (opp.product as string) ?? ''
+  return p ? [newProductLine(p, Number(opp.value) || 0, 1)] : []
+}
+export function productSummary(lines: ProductLine[]): string {
+  return lines.map((l) => l.product).filter(Boolean).join(', ')
+}
+
 type Note = {
   id: string
   opportunity_id: string
@@ -66,6 +92,20 @@ export function generateQuarters(count = 8): string[] {
   const currentQ = Math.floor(now.getMonth() / 3) + 1
   const quarters: string[] = []
   let q = currentQ, y = year
+  for (let i = 0; i < count; i++) {
+    quarters.push(`Q${q}-${y}`)
+    if (++q > 4) { q = 1; y++ }
+  }
+  return quarters
+}
+
+// Generate `count` quarters starting from a "Qn-YYYY" string (e.g. the deal's
+// close date). Falls back to the current-quarter window when no/invalid start.
+export function generateQuartersFrom(start: string | null | undefined, count = 8): string[] {
+  const m = String(start ?? '').match(/Q([1-4])-(\d{4})/)
+  if (!m) return generateQuarters(count)
+  let q = Number(m[1]), y = Number(m[2])
+  const quarters: string[] = []
   for (let i = 0; i < count; i++) {
     quarters.push(`Q${q}-${y}`)
     if (++q > 4) { q = 1; y++ }
@@ -117,11 +157,17 @@ export function NumericInput({
   onChange,
   className,
   placeholder,
+  step = 1,
+  min = 0,
+  max,
 }: {
   value: number | null
   onChange: (v: number | null) => void
   className?: string
   placeholder?: string
+  step?: number
+  min?: number
+  max?: number
 }) {
   function toDisplay(n: number | null) {
     if (n == null || isNaN(n)) return ''
@@ -147,17 +193,120 @@ export function NumericInput({
     }
   }
 
+  function bump(delta: number) {
+    let next = (value ?? 0) + delta
+    if (min != null) next = Math.max(min, next)
+    if (max != null) next = Math.min(max, next)
+    onChange(next)
+  }
+
   return (
-    <input
-      type="text"
-      inputMode="numeric"
-      className={className}
-      placeholder={placeholder}
-      value={display}
-      onChange={handleChange}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
-    />
+    <div className="relative w-full">
+      <input
+        type="text"
+        inputMode="numeric"
+        className={`${className ?? ''} pr-6`}
+        placeholder={placeholder}
+        value={display}
+        onChange={handleChange}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+      />
+      {/* Up / down steppers */}
+      <div className="absolute inset-y-0 right-0 flex w-5 flex-col overflow-hidden rounded-r-lg border-l border-zinc-200/70">
+        <button
+          type="button"
+          tabIndex={-1}
+          onMouseDown={(e) => { e.preventDefault(); bump(step) }}
+          title="Increase"
+          className="flex flex-1 items-center justify-center bg-zinc-50/80 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700"
+        >
+          <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" /></svg>
+        </button>
+        <button
+          type="button"
+          tabIndex={-1}
+          onMouseDown={(e) => { e.preventDefault(); bump(-step) }}
+          title="Decrease"
+          className="flex flex-1 items-center justify-center border-t border-zinc-200/70 bg-zinc-50/80 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700"
+        >
+          <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── Resizable, draggable-corner dialog frame ───────────────────────────────────
+// Shared by the add and edit opportunity modals. Starts at a sensible default
+// size and can be resized by dragging any of the four corners.
+function ResizableDialog({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
+  const panelRef = useRef<HTMLDivElement>(null)
+  const [size, setSize] = useState<{ w: number; h: number } | null>(null)
+
+  function startResize(e: React.PointerEvent, corner: 'nw' | 'ne' | 'sw' | 'se') {
+    e.preventDefault()
+    e.stopPropagation()
+    const rect = panelRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const startX = e.clientX, startY = e.clientY
+    const startW = rect.width, startH = rect.height
+    const signX = corner.includes('e') ? 1 : -1
+    const signY = corner.includes('s') ? 1 : -1
+    const maxW = window.innerWidth - 24
+    const maxH = window.innerHeight - 24
+
+    function onMove(ev: PointerEvent) {
+      // The panel is centre-anchored, so it grows by twice the cursor delta to
+      // keep the dragged corner under the pointer.
+      const w = Math.min(maxW, Math.max(380, startW + signX * (ev.clientX - startX) * 2))
+      const h = Math.min(maxH, Math.max(340, startH + signY * (ev.clientY - startY) * 2))
+      setSize({ w, h })
+    }
+    function onUp() {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      document.body.style.userSelect = ''
+    }
+    document.body.style.userSelect = 'none'
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }
+
+  const handles: { corner: 'nw' | 'ne' | 'sw' | 'se'; cls: string; cursor: string }[] = [
+    { corner: 'nw', cls: 'top-0 left-0',     cursor: 'nwse-resize' },
+    { corner: 'ne', cls: 'top-0 right-0',    cursor: 'nesw-resize' },
+    { corner: 'sw', cls: 'bottom-0 left-0',  cursor: 'nesw-resize' },
+    { corner: 'se', cls: 'bottom-0 right-0', cursor: 'nwse-resize' },
+  ]
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div
+        ref={panelRef}
+        className={`relative flex w-full flex-col rounded-2xl bg-white shadow-2xl ${size ? '' : 'max-w-3xl'}`}
+        style={size ? { width: size.w, height: size.h } : { height: '88vh' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {children}
+        {handles.map(({ corner, cls, cursor }) => (
+          <div
+            key={corner}
+            onPointerDown={(e) => startResize(e, corner)}
+            title="Drag to resize"
+            className={`absolute ${cls} z-20 h-4 w-4`}
+            style={{ cursor }}
+          >
+            {corner === 'se' && (
+              <svg className="absolute bottom-0.5 right-0.5 h-2.5 w-2.5 text-zinc-300" viewBox="0 0 10 10" fill="currentColor">
+                <path d="M9 1v8H1z" opacity="0.5" />
+                <path d="M9 4v5H4z" />
+              </svg>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -211,7 +360,10 @@ export function Modal({
     setSaving(true)
     setSaveError(null)
 
-    const finalWinValue = isWon ? (draft.final_win_value || draft.value) : null
+    // Products are the source of truth for the deal value and product label.
+    const cleanLines  = draft.product_lines.filter((l) => l.product || l.price || l.quantity > 1)
+    const dealValue   = cleanLines.length > 0 ? linesTotal(cleanLines) : draft.value
+    const finalWinValue = isWon ? (draft.final_win_value || dealValue) : null
 
     const base = {
       name:              draft.name,
@@ -219,11 +371,12 @@ export function Modal({
       owner:             draft.owner || null,
       stage:             draft.stage,
       status:            draft.status || null,
-      product:           draft.product || null,
+      product:           (cleanLines.length > 0 ? productSummary(cleanLines) : draft.product) || null,
+      product_lines:     cleanLines,
       country:           draft.country || null,
       currency:          draft.currency || 'USD',
       close_date:        draft.close_date || null,
-      value:             draft.value,
+      value:             dealValue,
       final_win_value:   finalWinValue,
       loss_reason:       isLost ? draft.loss_reason : null,
       loss_description:  isLost ? draft.loss_description : null,
@@ -235,10 +388,11 @@ export function Modal({
     const payload: Record<string, unknown> = { ...base }
     let sbError: { message: string } | null = null
 
-    for (let attempt = 0; attempt < 5; attempt++) {
+    for (let attempt = 0; attempt < 6; attempt++) {
       const { error } = await supabase.from('opportunities').update(payload).eq('id', opportunity.id)
       sbError = error
       if (!error) break
+      if (error.message?.includes('product_lines'))     { delete payload.product_lines;     continue }
       if (error.message?.includes('quarterly_incomes')) { delete payload.quarterly_incomes; continue }
       if (error.message?.includes('probability'))       { delete payload.probability;       continue }
       if (error.message?.includes('final_win_value'))   { delete payload.final_win_value;   continue }
@@ -269,12 +423,7 @@ export function Modal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div
-        className="flex w-full max-w-2xl flex-col rounded-2xl bg-white shadow-2xl"
-        style={{ height: '88vh' }}
-        onClick={(e) => e.stopPropagation()}
-      >
+    <ResizableDialog onClose={onClose}>
         {/* ── Fixed Header ──────────────────────────────────────────── */}
         <div className="shrink-0 rounded-t-2xl border-b border-zinc-100 bg-white px-6 py-4">
           <div className="flex items-center justify-between gap-4">
@@ -390,16 +539,6 @@ export function Modal({
                   }
                 </Field>
 
-                <Field label="Product">
-                  <SearchableSelect
-                    value={draft.product}
-                    onChange={(v) => setDraft((d) => ({ ...d, product: v }))}
-                    options={productsProp ?? PRODUCTS}
-                    placeholder="Search product…"
-                    className={inputCls}
-                  />
-                </Field>
-
                 <Field label="Country">
                   <SearchableSelect
                     value={draft.country}
@@ -433,7 +572,12 @@ export function Modal({
                 </Field>
 
                 <Field label="Value (Forecast)">
-                  <NumericInput className={inputCls} value={draft.value} onChange={(v) => setDraft((d) => ({ ...d, value: v }))} />
+                  <div className={`${inputCls} flex items-center justify-between bg-zinc-100`} title="Sum of the product lines below">
+                    <span className="font-semibold text-zinc-800">
+                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: draft.currency || 'USD', maximumFractionDigits: 0 }).format(draft.value ?? 0)}
+                    </span>
+                    <span className="text-[11px] text-zinc-400">= Σ products</span>
+                  </div>
                 </Field>
 
                 <Field label="Probability %">
@@ -470,6 +614,15 @@ export function Modal({
                 )}
 
               </div>
+
+              {/* ── Products that make up the opportunity ───────────────── */}
+              <ProductLinesEditor
+                lines={draft.product_lines}
+                onChange={(lines) => setDraft((d) => ({ ...d, product_lines: lines, value: linesTotal(lines), product: productSummary(lines) }))}
+                products={productsProp ?? PRODUCTS}
+                currency={draft.currency}
+                inputCls={inputCls}
+              />
 
               {/* ── Planned income by quarter (drives the Projection tab) ── */}
               <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-4">
@@ -508,7 +661,7 @@ export function Modal({
                   dealValue={draft.value}
                 />
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  {QUARTERS.map((q) => (
+                  {generateQuartersFrom(draft.close_date).map((q) => (
                     <div key={q}>
                       <p className="mb-1 text-[11px] font-semibold text-zinc-400">{q}</p>
                       {qiMode === 'amount' ? (
@@ -591,15 +744,13 @@ export function Modal({
           {modalTab === 'contacts'  && <ContactsPanel  opportunityId={String(opportunity.id)} />}
 
         </div>
-      </div>
-    </div>
+    </ResizableDialog>
   )
 }
 
 export function AddOpportunityModal({
   onClose,
   onAdded,
-  onUpdated,
   products: productsProp,
   managers: managersProp,
   defaultOwner = '',
@@ -607,6 +758,7 @@ export function AddOpportunityModal({
 }: {
   onClose: () => void
   onAdded: (opp: Opportunity) => void
+  /** @deprecated kept for call-site compatibility; the add flow saves and closes in one step. */
   onUpdated?: (opp: Opportunity) => void
   products?: string[]
   managers?: string[]
@@ -617,11 +769,10 @@ export function AddOpportunityModal({
     name: '', customer_name: '', country: '', owner: defaultOwner,
     stage: 'Discovery', product: '', status: 'On Track', close_date: '', value: '',
     currency: 'USD', probability: null as number | null,
+    product_lines: [] as ProductLine[],
   })
   const [saving, setSaving]   = useState(false)
   const [error, setError]     = useState<string | null>(null)
-  const [savedOpp, setSavedOpp] = useState<Opportunity | null>(null)
-  const [activeTab, setActiveTab] = useState<'details' | 'contacts' | 'documents' | 'notes'>('details')
 
   useEffect(() => {
     if (defaultOwner) setForm((f) => ({ ...f, owner: f.owner || defaultOwner }))
@@ -633,17 +784,21 @@ export function AddOpportunityModal({
     setSaving(true)
     setError(null)
 
+    const cleanLines = form.product_lines.filter((l) => l.product || l.price || l.quantity > 1)
+    const dealValue  = cleanLines.length > 0 ? linesTotal(cleanLines) : (form.value === '' ? null : Number(form.value))
+
     const base = {
       name:             form.name.trim(),
       customer_name:    form.customer_name.trim(),
       owner:            form.owner || null,
       stage:            form.stage,
-      product:          form.product || null,
+      product:          (cleanLines.length > 0 ? productSummary(cleanLines) : form.product) || null,
+      product_lines:    cleanLines,
       status:           form.status || null,
       country:          form.country || null,
       currency:         form.currency || 'USD',
       close_date:       form.close_date || null,
-      value:            form.value === '' ? null : Number(form.value),
+      value:            dealValue,
       probability:      form.probability,
       loss_reason:      null,
       loss_description: null,
@@ -654,14 +809,15 @@ export function AddOpportunityModal({
     let data: any[] | null = null
     let sbError: { message: string } | null = null
 
-    for (let attempt = 0; attempt < 4; attempt++) {
+    for (let attempt = 0; attempt < 5; attempt++) {
       const res = await supabase.from('opportunities').insert([payload]).select()
       data = res.data; sbError = res.error
       if (!res.error) break
       // Strip unsupported columns one at a time and retry.
       // Note: final_win_value is not sent on INSERT so that branch is omitted here.
-      if (res.error.message?.includes('probability')) { delete payload.probability; continue }
-      if (res.error.message?.includes('currency'))    { delete payload.currency;    continue }
+      if (res.error.message?.includes('product_lines')) { delete payload.product_lines; continue }
+      if (res.error.message?.includes('probability'))   { delete payload.probability;   continue }
+      if (res.error.message?.includes('currency'))      { delete payload.currency;      continue }
       break
     }
 
@@ -669,62 +825,14 @@ export function AddOpportunityModal({
     if (sbError) { setError(sbError.message); return }
     const newOpp = (data?.[0] ?? { id: crypto.randomUUID(), ...payload }) as Opportunity
     onAdded(newOpp)
-    setSavedOpp(newOpp)
+    onClose()
   }
 
   const inputCls  = 'w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 focus:border-blue-400 focus:bg-white focus:outline-none transition-colors'
   const selectCls = inputCls
-  const TABS = ['details', 'contacts', 'documents', 'notes'] as const
-
-  // Placeholder shown on locked tabs before saving
-  function LockedTab() {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-zinc-100">
-          <svg className="h-6 w-6 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-          </svg>
-        </div>
-        <p className="text-sm font-semibold text-zinc-500">Save the opportunity first</p>
-        <p className="mt-1 text-xs text-zinc-400">Fill in the Details tab and click Save, then this tab will unlock.</p>
-        <button
-          onClick={() => setActiveTab('details')}
-          className="mt-4 rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 transition-colors"
-        >
-          Go to Details
-        </button>
-      </div>
-    )
-  }
-
-  // Once the opportunity is saved, hand off to the full edit modal so the
-  // user can keep editing without closing and reopening.
-  if (savedOpp) {
-    return (
-      <Modal
-        opportunity={savedOpp}
-        onClose={onClose}
-        onSaved={(updated) => {
-          setSavedOpp(updated)
-          onUpdated?.(updated)
-        }}
-        products={productsProp}
-        managers={managersProp}
-        probabilityDefaults={probabilityDefaults}
-      />
-    )
-  }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      onClick={onClose}
-    >
-      <div
-        className="flex w-full max-w-2xl flex-col rounded-2xl bg-white shadow-2xl"
-        style={{ height: '88vh' }}
-        onClick={(e) => e.stopPropagation()}
-      >
+    <ResizableDialog onClose={onClose}>
         {/* ── Fixed header ────────────────────────────────────────────────── */}
         <div className="shrink-0 rounded-t-2xl border-b border-zinc-100 bg-white px-6 py-4">
           <div className="flex items-center justify-between gap-4">
@@ -738,21 +846,16 @@ export function AddOpportunityModal({
               />
               <div className="mt-1.5 flex items-center gap-2">
                 <StageBadge stage={form.stage} />
-                {savedOpp && <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">Saved</span>}
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              {!savedOpp ? (
-                <button
-                  onClick={handleSubmit}
-                  disabled={saving || !canSubmit}
-                  className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {saving ? 'Saving…' : 'Save'}
-                </button>
-              ) : (
-                <span className="text-xs text-zinc-400">All tabs are now active</span>
-              )}
+              <button
+                onClick={handleSubmit}
+                disabled={saving || !canSubmit}
+                className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {saving ? 'Saving…' : 'Save Opportunity'}
+              </button>
               <button
                 onClick={onClose}
                 aria-label="Close"
@@ -767,46 +870,21 @@ export function AddOpportunityModal({
 
           {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
 
-          {/* Stage pills — only on details tab before saving */}
-          {activeTab === 'details' && !savedOpp && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {STAGES.map((s) => {
-                const active = form.stage === s
-                const colors: Record<string, string> = {
-                  Discovery:   active ? 'bg-blue-600 text-white'   : 'bg-blue-50 text-blue-700 hover:bg-blue-100',
-                  Proposal:    active ? 'bg-yellow-500 text-white'  : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100',
-                  Negotiation: active ? 'bg-orange-500 text-white'  : 'bg-orange-50 text-orange-700 hover:bg-orange-100',
-                  Win:         active ? 'bg-green-600 text-white'   : 'bg-green-50 text-green-700 hover:bg-green-100',
-                  Loss:        active ? 'bg-red-600 text-white'     : 'bg-red-50 text-red-700 hover:bg-red-100',
-                }
-                return (
-                  <button key={s} type="button" onClick={() => setForm((f) => ({ ...f, stage: s }))}
-                    className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${colors[s] ?? ''}`}>
-                    {s}
-                  </button>
-                )
-              })}
-            </div>
-          )}
-
-          {/* Tab bar */}
-          <div className="mt-3 flex gap-0.5 border-b border-zinc-100">
-            {TABS.map((t) => {
-              const locked = t !== 'details' && !savedOpp
+          {/* Stage pills */}
+          <div className="mt-3 flex flex-wrap gap-2">
+            {STAGES.map((s) => {
+              const active = form.stage === s
+              const colors: Record<string, string> = {
+                Discovery:   active ? 'bg-blue-600 text-white'   : 'bg-blue-50 text-blue-700 hover:bg-blue-100',
+                Proposal:    active ? 'bg-yellow-500 text-white'  : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100',
+                Negotiation: active ? 'bg-orange-500 text-white'  : 'bg-orange-50 text-orange-700 hover:bg-orange-100',
+                Win:         active ? 'bg-green-600 text-white'   : 'bg-green-50 text-green-700 hover:bg-green-100',
+                Loss:        active ? 'bg-red-600 text-white'     : 'bg-red-50 text-red-700 hover:bg-red-100',
+              }
               return (
-                <button
-                  key={t}
-                  onClick={() => setActiveTab(t)}
-                  className={`relative -mb-px rounded-t-lg px-4 py-2 text-sm font-medium capitalize transition-colors ${
-                    activeTab === t
-                      ? 'border-b-2 border-blue-600 text-blue-600'
-                      : locked
-                      ? 'cursor-not-allowed text-zinc-300'
-                      : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800'
-                  }`}
-                >
-                  {t}
-                  {locked && <span className="ml-1 text-[10px] opacity-60">🔒</span>}
+                <button key={s} type="button" onClick={() => setForm((f) => ({ ...f, stage: s }))}
+                  className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${colors[s] ?? ''}`}>
+                  {s}
                 </button>
               )
             })}
@@ -816,9 +894,8 @@ export function AddOpportunityModal({
         {/* ── Scrollable body ──────────────────────────────────────────────── */}
         <div className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
 
-          {/* Details tab */}
-          {activeTab === 'details' && !savedOpp && (
-            <div className="grid grid-cols-2 gap-4">
+          {/* Details */}
+          <div className="grid grid-cols-2 gap-4">
               <Field label="Account Name">
                 <input className={inputCls} placeholder="Company or account"
                   value={form.customer_name} onChange={(e) => setForm((f) => ({ ...f, customer_name: e.target.value }))} />
@@ -835,16 +912,6 @@ export function AddOpportunityModal({
                     </select>
                   : <input className={inputCls} placeholder="Manager name" value={form.owner} onChange={(e) => setForm((f) => ({ ...f, owner: e.target.value }))} />
                 }
-              </Field>
-
-              <Field label="Product">
-                <SearchableSelect
-                  value={form.product}
-                  onChange={(v) => setForm((f) => ({ ...f, product: v }))}
-                  options={productsProp ?? PRODUCTS}
-                  placeholder="Search product…"
-                  className={inputCls}
-                />
               </Field>
 
               <Field label="Country">
@@ -880,9 +947,12 @@ export function AddOpportunityModal({
               </Field>
 
               <Field label="Value (Forecast)">
-                <NumericInput className={inputCls} placeholder="0"
-                  value={form.value === '' ? null : Number(form.value)}
-                  onChange={(v) => setForm((f) => ({ ...f, value: v == null ? '' : String(v) }))} />
+                <div className={`${inputCls} flex items-center justify-between bg-zinc-100`} title="Sum of the product lines below">
+                  <span className="font-semibold text-zinc-800">
+                    {new Intl.NumberFormat('en-US', { style: 'currency', currency: form.currency || 'USD', maximumFractionDigits: 0 }).format(linesTotal(form.product_lines))}
+                  </span>
+                  <span className="text-[11px] text-zinc-400">= Σ products</span>
+                </div>
               </Field>
 
               <Field label="Probability %">
@@ -902,23 +972,23 @@ export function AddOpportunityModal({
                   </span>
                 </div>
               </Field>
-            </div>
-          )}
 
-          {/* After saving — details shows the read/edit view via Modal internals */}
-          {activeTab === 'details' && savedOpp && (
-            <p className="text-sm text-zinc-500">
-              Opportunity saved. Close this window and reopen it from the Pipeline table to edit details.
-            </p>
-          )}
+              {/* ── Products that make up the opportunity ───────────────── */}
+              <ProductLinesEditor
+                lines={form.product_lines}
+                onChange={(lines) => setForm((f) => ({ ...f, product_lines: lines }))}
+                products={productsProp ?? PRODUCTS}
+                currency={form.currency}
+                inputCls={inputCls}
+              />
 
-          {activeTab === 'contacts'  && <LockedTab />}
-          {activeTab === 'documents' && <LockedTab />}
-          {activeTab === 'notes'     && <LockedTab />}
+              <p className="col-span-2 text-xs text-zinc-400">
+                Contacts, documents and notes can be added after saving — reopen the opportunity from the Pipeline.
+              </p>
+          </div>
 
         </div>
-      </div>
-    </div>
+    </ResizableDialog>
   )
 }
 
@@ -930,6 +1000,7 @@ function toDraft(opp: Opportunity): Draft {
     stage: opp.stage ?? '',
     status: (opp.status as string) ?? '',
     product: (opp.product as string) ?? '',
+    product_lines: getProductLines(opp),
     country: (opp.country as string) ?? '',
     close_date: (opp as any).close_date ?? '',
     currency: (opp as any).currency ?? 'USD',
@@ -940,6 +1011,99 @@ function toDraft(opp: Opportunity): Draft {
     probability: (opp as any).probability ?? null,
     quarterly_incomes: ((opp as any).quarterly_incomes as Record<string, number>) ?? {},
   }
+}
+
+// ── Product lines editor ──────────────────────────────────────────────────────
+// Used by both the add and edit modals. Each row is a product with its own
+// quantity and unit price; the footer shows the opportunity total.
+function ProductLinesEditor({
+  lines,
+  onChange,
+  products,
+  currency,
+  inputCls,
+}: {
+  lines: ProductLine[]
+  onChange: (lines: ProductLine[]) => void
+  products: string[]
+  currency: string
+  inputCls: string
+}) {
+  const cfmt = (n: number) =>
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: currency || 'USD', maximumFractionDigits: 0 }).format(n)
+
+  function update(id: string, patch: Partial<ProductLine>) {
+    onChange(lines.map((l) => (l.id === id ? { ...l, ...patch } : l)))
+  }
+
+  return (
+    <div className="col-span-2 rounded-xl border border-zinc-200 bg-zinc-50/60 p-4">
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Products</p>
+        <span className="text-xs text-zinc-400">{lines.length} line{lines.length !== 1 ? 's' : ''}</span>
+      </div>
+
+      {lines.length > 0 && (
+        <div className="mb-1 grid grid-cols-12 gap-2 px-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+          <div className="col-span-4">Product</div>
+          <div className="col-span-2 text-center">Qty</div>
+          <div className="col-span-3 text-center">Unit Price</div>
+          <div className="col-span-3 text-right">Line Total</div>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        {lines.length === 0 && (
+          <p className="rounded-lg bg-white px-3 py-3 text-center text-xs text-zinc-400">
+            No products yet — add one below.
+          </p>
+        )}
+        {lines.map((l) => (
+          <div key={l.id} className="grid grid-cols-12 items-center gap-2">
+            <div className="col-span-4">
+              <SearchableSelect
+                value={l.product}
+                onChange={(v) => update(l.id, { product: v })}
+                options={products}
+                placeholder="Product…"
+                className={inputCls}
+              />
+            </div>
+            <div className="col-span-2">
+              <NumericInput className={`${inputCls} text-center`} placeholder="1" value={l.quantity} min={1} onChange={(v) => update(l.id, { quantity: Math.max(1, v ?? 1) })} />
+            </div>
+            <div className="col-span-3">
+              <NumericInput className={inputCls} placeholder="0" value={l.price} onChange={(v) => update(l.id, { price: Math.max(0, v ?? 0) })} />
+            </div>
+            <div className="col-span-3 flex items-center justify-end gap-1.5">
+              <span className="whitespace-nowrap text-sm font-semibold text-zinc-700" title="Line total">{cfmt(lineTotal(l))}</span>
+              <button
+                type="button"
+                onClick={() => onChange(lines.filter((x) => x.id !== l.id))}
+                title="Remove product"
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-zinc-300 transition-colors hover:bg-red-50 hover:text-red-500"
+              >
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-3 flex items-center justify-between border-t border-zinc-200 pt-2">
+        <button
+          type="button"
+          onClick={() => onChange([...lines, newProductLine()])}
+          className="rounded-lg px-2.5 py-1 text-xs font-semibold text-blue-600 transition-colors hover:bg-blue-50"
+        >
+          + Add product
+        </button>
+        <span className="text-sm font-bold text-zinc-900">Total: {cfmt(linesTotal(lines))}</span>
+      </div>
+    </div>
+  )
 }
 
 // ── Notes Panel ───────────────────────────────────────────────────────────────

@@ -29,7 +29,7 @@ const CURRENT_YEAR     = String(new Date().getFullYear())
 // per-year targets. Used by the header year selector and Analytics.
 const ALL_YEARS        = 'All Years'
 
-type Tab = 'Dashboard' | 'Sales Managers' | 'Pipeline' | 'Analytics' | 'Projection' | 'Targets' | 'Settings'
+type Tab = 'Dashboard' | 'Sales Managers' | 'Opportunities' | 'Analytics' | 'Projection' | 'Targets' | 'Settings'
 
 type UserProfile = {
   id: string
@@ -43,6 +43,13 @@ const currencyFmt = new Intl.NumberFormat('en-US', {
   style: 'currency', currency: 'USD', maximumFractionDigits: 0,
 })
 function fmtCurrency(n: number) { return currencyFmt.format(n) }
+
+// A manager's annual target is derived from their product target rows — the
+// single source of truth shared by the Targets tab and all analytics. Stored
+// target numbers without backing product rows therefore never show up.
+function weightedFromRows(rows: ProductTargetRow[] | undefined): number {
+  return Math.round((rows ?? []).reduce((s, r) => s + (r.price || 0) * (r.quantity || 0) * ((r.probability || 0) / 100), 0))
+}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function Dashboard({ opportunities }: { opportunities: Opportunity[] }) {
@@ -148,18 +155,29 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
   // ── Per-year, per-manager product target rows ─────────────────────────────
   const [productTargetRowsByYear, setProductTargetRowsByYear] = useState<Record<string, Record<string, ProductTargetRow[]>>>({})
 
-  // Stable reference: only creates a new object when selectedYear or targetsByYear changes.
-  // For "All Years" we sum each manager's target across every year.
+  // Targets are derived from each manager's product target rows (the Targets
+  // tab's source of truth), so Analytics always matches what the Targets tab
+  // shows. For "All Years" we sum each manager's target across every year.
+  const targetsForYear = useCallback((year: string): Record<string, number> => {
+    const byManager = productTargetRowsByYear[year] ?? {}
+    const out: Record<string, number> = {}
+    for (const [m, rows] of Object.entries(byManager)) {
+      const t = weightedFromRows(rows)
+      if (t > 0) out[m] = t
+    }
+    return out
+  }, [productTargetRowsByYear])
+
   const managerTargets = useMemo(() => {
     if (selectedYear === ALL_YEARS) {
       const agg: Record<string, number> = {}
-      for (const yearMap of Object.values(targetsByYear)) {
-        for (const [m, v] of Object.entries(yearMap)) agg[m] = (agg[m] ?? 0) + v
+      for (const year of Object.keys(productTargetRowsByYear)) {
+        for (const [m, v] of Object.entries(targetsForYear(year))) agg[m] = (agg[m] ?? 0) + v
       }
       return agg
     }
-    return targetsByYear[selectedYear] ?? {}
-  }, [targetsByYear, selectedYear])
+    return targetsForYear(selectedYear)
+  }, [productTargetRowsByYear, selectedYear, targetsForYear])
 
   const setManagerTargets = useCallback(
     (v: Record<string, number>) =>
@@ -216,20 +234,31 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
   )
 
   // ── Quarterly targets for selected year ──────────────────────────────────
-  // For "All Years" we sum each manager's quarterly split across every year.
+  // Only managers with a real annual target (backing product rows) contribute,
+  // so stale quarterly numbers without product rows don't surface.
+  const quarterlyForYear = useCallback((year: string): Record<string, QuarterlyData> => {
+    const stored = quarterlyTargetsByYear[year] ?? {}
+    const annual = targetsForYear(year)
+    const out: Record<string, QuarterlyData> = {}
+    for (const [m, q] of Object.entries(stored)) {
+      if ((annual[m] ?? 0) > 0) out[m] = q
+    }
+    return out
+  }, [quarterlyTargetsByYear, targetsForYear])
+
   const quarterlyTargets = useMemo(() => {
     if (selectedYear === ALL_YEARS) {
       const agg: Record<string, QuarterlyData> = {}
-      for (const yearMap of Object.values(quarterlyTargetsByYear)) {
-        for (const [m, q] of Object.entries(yearMap)) {
+      for (const year of Object.keys(quarterlyTargetsByYear)) {
+        for (const [m, q] of Object.entries(quarterlyForYear(year))) {
           const cur = agg[m] ?? { q1: 0, q2: 0, q3: 0, q4: 0 }
           agg[m] = { q1: cur.q1 + q.q1, q2: cur.q2 + q.q2, q3: cur.q3 + q.q3, q4: cur.q4 + q.q4 }
         }
       }
       return agg
     }
-    return quarterlyTargetsByYear[selectedYear] ?? {}
-  }, [quarterlyTargetsByYear, selectedYear])
+    return quarterlyForYear(selectedYear)
+  }, [quarterlyTargetsByYear, selectedYear, quarterlyForYear])
   const setQuarterlyTargets = useCallback(
     (v: Record<string, QuarterlyData>) =>
       setQuarterlyTargetsByYear((prev) => ({ ...prev, [selectedYear]: v })),
@@ -296,14 +325,14 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
 
   const tabs = useMemo<Tab[]>(
     () => isAdmin && isHoS
-      ? ['Dashboard', 'Sales Managers', 'Pipeline', 'Analytics', 'Projection', 'Targets', 'Settings']
+      ? ['Dashboard', 'Sales Managers', 'Opportunities', 'Analytics', 'Projection', 'Targets', 'Settings']
       : isAdmin && !isHoS
-      ? ['Dashboard', 'Pipeline', 'Analytics', 'Projection', 'Targets']
+      ? ['Dashboard', 'Opportunities', 'Analytics', 'Projection', 'Targets']
       : isHoS
-      ? ['Dashboard', 'Sales Managers', 'Pipeline', 'Analytics', 'Projection', 'Targets', 'Settings']
+      ? ['Dashboard', 'Sales Managers', 'Opportunities', 'Analytics', 'Projection', 'Targets', 'Settings']
       : isPartner
-      ? ['Dashboard', 'Sales Managers', 'Pipeline', 'Analytics', 'Projection']
-      : ['Dashboard', 'Pipeline', 'Analytics', 'Projection'],
+      ? ['Dashboard', 'Sales Managers', 'Opportunities', 'Analytics', 'Projection']
+      : ['Dashboard', 'Opportunities', 'Analytics', 'Projection'],
     [isAdmin, isHoS, isPartner],
   )
   const safeTab: Tab = tabs.includes(activeTab) ? activeTab : 'Dashboard'
@@ -353,7 +382,7 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
 
   // ── Handlers ─────────────────────────────────────────────────────────────
   const handleNewOpportunity = useCallback(() => {
-    if (safeTab !== 'Pipeline') setActiveTab('Pipeline')
+    if (safeTab !== 'Opportunities') setActiveTab('Opportunities')
     setAddFormOpen(true)
   }, [safeTab])
 
@@ -627,11 +656,11 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
           />
         )}
 
-        {safeTab === 'Pipeline' && (
+        {safeTab === 'Opportunities' && (
           <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
             <div className="mb-4">
               <h3 className="text-sm font-bold text-gray-900">
-                {isFullAccess ? 'Full Pipeline' : `${viewAs}'s Pipeline`}
+                {isFullAccess ? 'All Opportunities' : `${viewAs}'s Opportunities`}
               </h3>
               <p className="mt-0.5 text-xs text-gray-400">
                 {allVisibleOpps.length} opportunit{allVisibleOpps.length !== 1 ? 'ies' : 'y'}
@@ -672,9 +701,17 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
             onQuarterlyTargetsChange={setQuarterlyTargets}
             selectedYear={selectedYear}
             availableYears={availableYears.filter((y) => y !== ALL_YEARS)}
-            onCopyTargetsToYear={(toYear) =>
-              setTargetsByYear((prev) => ({ ...prev, [toYear]: { ...(prev[selectedYear] ?? {}) } }))
-            }
+            onCopyTargetsToYear={(toYear) => {
+              // Targets derive from product rows, so copy the rows (fresh ids)
+              // and the quarterly splits to the destination year.
+              setProductTargetRowsByYear((prev) => {
+                const src = prev[selectedYear] ?? {}
+                const copy: Record<string, ProductTargetRow[]> = {}
+                for (const [m, rows] of Object.entries(src)) copy[m] = rows.map((r) => ({ ...r, id: Math.random().toString(36).slice(2) }))
+                return { ...prev, [toYear]: copy }
+              })
+              setQuarterlyTargetsByYear((prev) => ({ ...prev, [toYear]: { ...(prev[selectedYear] ?? {}) } }))
+            }}
             products={products}
             productTargetRowsByManager={productTargetRowsByManager}
             onProductTargetRowsByManagerChange={setProductTargetRowsByManager}
