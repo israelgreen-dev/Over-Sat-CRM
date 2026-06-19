@@ -1,9 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { NumericInput } from './OpportunitiesTable'
 
-export type QuarterlyData = { q1: number; q2: number; q3: number; q4: number }
+export type QKey = 'q1' | 'q2' | 'q3' | 'q4'
+// `manual` lists the quarters the user pinned by editing them; the rest
+// auto-share the remainder of the annual target.
+export type QuarterlyData = { q1: number; q2: number; q3: number; q4: number; manual?: QKey[] }
 
 export type ProductTargetRow = {
   id: string
@@ -22,8 +25,9 @@ const fmtShort = (n: number) => {
   return `$${n}`
 }
 
-const QUARTERS: (keyof QuarterlyData)[] = ['q1', 'q2', 'q3', 'q4']
-const Q_LABELS = { q1: 'Q1', q2: 'Q2', q3: 'Q3', q4: 'Q4' }
+const ALL_Q: QKey[] = ['q1', 'q2', 'q3', 'q4']
+const QUARTERS: QKey[] = ALL_Q
+const Q_LABELS: Record<QKey, string> = { q1: 'Q1', q2: 'Q2', q3: 'Q3', q4: 'Q4' }
 
 const inputCls =
   'w-full rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5 text-sm text-center font-medium text-gray-900 focus:border-blue-400 focus:bg-white focus:outline-none transition-colors'
@@ -91,10 +95,68 @@ export default function TargetsTab({
     handleManagerRows(name, (productTargetRowsByManager[name] ?? []).filter((r) => r.id !== id))
   }
 
-  function handleQuarter(name: string, q: keyof QuarterlyData, v: number | null) {
-    const cur = quarterlyTargets[name] ?? { q1: 0, q2: 0, q3: 0, q4: 0 }
-    onQuarterlyTargetsChange({ ...quarterlyTargets, [name]: { ...cur, [q]: v ?? 0 } })
+  const annualOf = (name: string) => Math.round(computeWeighted(productTargetRowsByManager[name] ?? []))
+
+  // The quarterly split is "pinned vs auto":
+  //  • Quarters the user has edited are pinned (listed in `manual`) and keep
+  //    their value.
+  //  • Every other quarter auto-shares the remainder (annual − Σ pinned)
+  //    evenly. With nothing pinned that's a plain ÷4 even split.
+  function deriveQuarters(annual: number, vals: Record<QKey, number>, manual: QKey[]): QuarterlyData {
+    // No annual target (no product lines) → nothing to allocate; clear quarters.
+    if (annual <= 0) return { q1: 0, q2: 0, q3: 0, q4: 0, manual: [] }
+    const pins = ALL_Q.filter((k) => manual.includes(k))
+    const unpinned = ALL_Q.filter((k) => !pins.includes(k))
+    const out: Record<QKey, number> = { q1: 0, q2: 0, q3: 0, q4: 0 }
+    let pinnedSum = 0
+    for (const k of pins) { out[k] = Math.max(0, vals[k] || 0); pinnedSum += out[k] }
+    if (unpinned.length > 0) {
+      const remainder = Math.max(0, annual - pinnedSum)
+      const base = Math.floor(remainder / unpinned.length)
+      const leftover = remainder - base * unpinned.length // rounding goes on the last auto quarter
+      unpinned.forEach((k, i) => { out[k] = base + (i === unpinned.length - 1 ? leftover : 0) })
+    }
+    return { ...out, manual: pins }
   }
+
+  function effectiveQuarters(name: string): QuarterlyData {
+    const stored = quarterlyTargets[name]
+    const manual = ((stored?.manual ?? []) as QKey[]).filter((k) => ALL_Q.includes(k))
+    const vals: Record<QKey, number> = {
+      q1: stored?.q1 ?? 0, q2: stored?.q2 ?? 0, q3: stored?.q3 ?? 0, q4: stored?.q4 ?? 0,
+    }
+    return deriveQuarters(annualOf(name), vals, manual)
+  }
+
+  // Editing a quarter pins it; the remaining auto quarters re-share the rest.
+  function handleQuarter(name: string, q: QKey, v: number | null) {
+    const prev = (quarterlyTargets[name]?.manual ?? []) as QKey[]
+    const manual = prev.includes(q) ? prev : [...prev, q]
+    const eff = effectiveQuarters(name)
+    const vals: Record<QKey, number> = { q1: eff.q1, q2: eff.q2, q3: eff.q3, q4: eff.q4, [q]: Math.max(0, v ?? 0) }
+    onQuarterlyTargetsChange({ ...quarterlyTargets, [name]: deriveQuarters(annualOf(name), vals, manual) })
+  }
+
+  // Persist the effective split (and re-share auto quarters when the annual
+  // target changes) so analytics and saved settings stay consistent even if
+  // the user never manually edits a quarter.
+  useEffect(() => {
+    if (readOnly) return
+    let changed = false
+    const next: Record<string, QuarterlyData> = { ...quarterlyTargets }
+    for (const name of managers) {
+      if (annualOf(name) <= 0 && !quarterlyTargets[name]) continue
+      const eff = effectiveQuarters(name)
+      const cur = quarterlyTargets[name]
+      const sameManual = JSON.stringify(cur?.manual ?? []) === JSON.stringify(eff.manual ?? [])
+      if (!cur || cur.q1 !== eff.q1 || cur.q2 !== eff.q2 || cur.q3 !== eff.q3 || cur.q4 !== eff.q4 || !sameManual) {
+        next[name] = eff
+        changed = true
+      }
+    }
+    if (changed) onQuarterlyTargetsChange(next)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [managers, quarterlyTargets, productTargetRowsByManager, readOnly])
 
 
   // Totals across all managers
@@ -104,7 +166,7 @@ export default function TargetsTab({
 
   const overallQ = managers.reduce(
     (acc, name) => {
-      const q = quarterlyTargets[name] ?? { q1: 0, q2: 0, q3: 0, q4: 0 }
+      const q = effectiveQuarters(name)
       return { q1: acc.q1 + q.q1, q2: acc.q2 + q.q2, q3: acc.q3 + q.q3, q4: acc.q4 + q.q4 }
     },
     { q1: 0, q2: 0, q3: 0, q4: 0 },
@@ -157,7 +219,7 @@ export default function TargetsTab({
         const rows        = productTargetRowsByManager[name] ?? []
         const annualTarget = Math.round(computeWeighted(rows))
         const totalPrice  = rows.reduce((s, r) => s + r.price * r.quantity, 0)
-        const qt          = quarterlyTargets[name] ?? { q1: 0, q2: 0, q3: 0, q4: 0 }
+        const qt          = effectiveQuarters(name)
         const qSum        = QUARTERS.reduce((s, q) => s + qt[q], 0)
 
         return (
@@ -306,33 +368,43 @@ export default function TargetsTab({
                 </thead>
                 <tbody>
                   <tr className="bg-white">
-                    {/* Small split button aligned right in its cell */}
+                    {/* Reset-to-even-split button aligned right in its cell */}
                     <td className="px-3 py-2 text-right">
                       {!readOnly && (
                         <button
                           onClick={() => {
-                            const q = Math.round(annualTarget / 4)
-                            onQuarterlyTargetsChange({ ...quarterlyTargets, [name]: { q1: q, q2: q, q3: q, q4: q } })
+                            onQuarterlyTargetsChange({ ...quarterlyTargets, [name]: deriveQuarters(annualTarget, { q1: 0, q2: 0, q3: 0, q4: 0 }, []) })
                           }}
                           disabled={annualTarget === 0}
-                          title={`Split ${fmt(annualTarget)} equally across Q1–Q4`}
+                          title={`Reset all quarters to an even ÷4 split of ${fmt(annualTarget)}`}
                           className="inline-flex items-center gap-1 rounded-lg bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white shadow-sm hover:bg-amber-400 active:bg-amber-600 disabled:opacity-40 transition-colors whitespace-nowrap"
                         >
                           <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M3 7h18M3 12h18M3 17h18" />
                           </svg>
-                          Split ÷ 4
+                          Reset ÷ 4
                         </button>
                       )}
                     </td>
-                    {QUARTERS.map((q) => (
-                      <td key={q} className="px-3 py-2 w-28">
-                        {readOnly
-                          ? <span className="block text-center text-sm font-semibold text-amber-700">{fmtShort(qt[q])}</span>
-                          : <NumericInput className={qInputCls} value={qt[q]} onChange={(v) => handleQuarter(name, q, v)} />
-                        }
-                      </td>
-                    ))}
+                    {QUARTERS.map((q) => {
+                      const isManual = (qt.manual ?? []).includes(q)
+                      return (
+                        <td key={q} className="px-3 py-2 w-28 align-top">
+                          {readOnly
+                            ? <span className="block text-center text-sm font-semibold text-amber-700">{fmtShort(qt[q])}</span>
+                            : <div className="flex flex-col gap-0.5">
+                                <NumericInput className={qInputCls} value={qt[q]} onChange={(v) => handleQuarter(name, q, v)} />
+                                <span
+                                  className={`text-center text-[10px] font-medium ${isManual ? 'text-amber-600' : 'text-amber-300'}`}
+                                  title={isManual ? 'Manually set — pinned' : 'Auto — shares the remainder evenly'}
+                                >
+                                  {isManual ? 'manual' : 'auto'}
+                                </span>
+                              </div>
+                          }
+                        </td>
+                      )
+                    })}
                   </tr>
                   {annualTarget > 0 && (() => {
                     const isMatch = qSum === annualTarget
@@ -414,7 +486,7 @@ export default function TargetsTab({
         <div className="flex flex-wrap items-center gap-4 text-xs text-gray-400">
           <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-blue-300" /> Total Price — unit price × qty</span>
           <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-emerald-400" /> Weighted Price — total × probability %</span>
-          <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-amber-300" /> Q1–Q4 — quarterly quota (editable or split ÷ 4)</span>
+          <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-amber-300" /> Quarters — auto ÷4 by default; edit one to pin it and the rest auto-share the remainder</span>
         </div>
       )}
 
