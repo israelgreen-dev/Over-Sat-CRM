@@ -852,7 +852,7 @@ export default function Dashboard() {
 
 // ── CSV export ─────────────────────────────────────────────────────────────────
 function exportCSV(opportunities: Opportunity[]) {
-  const headers = ['Name','Account','Owner','Stage','Status','Product','Country','Close Date','Currency','Value','Value (USD)','Probability %','Win Value','Loss Reason','Loss Description']
+  const headers = ['Name','Account','Owner','Stage','Status','Product','Country','Close Date','Currency','Value','Value (USD)','Probability %','Win Value','Loss Reason','Loss Description','Last Updated']
   const rows    = opportunities.map((o) => [
     o.name ?? '', o.customer_name ?? '', (o.owner as string) ?? '',
     o.stage ?? '', (o.status as string) ?? '', (o.product as string) ?? '',
@@ -862,6 +862,7 @@ function exportCSV(opportunities: Opportunity[]) {
     (o as any).probability ?? '',
     (o as any).final_win_value ?? '',
     o.loss_reason ?? '', o.loss_description ?? '',
+    (o as any).updated_at ?? (o as any).created_at ?? '',
   ])
   const csv  = [headers, ...rows].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
   const blob = new Blob([csv], { type: 'text/csv' })
