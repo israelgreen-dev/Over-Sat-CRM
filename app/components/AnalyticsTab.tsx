@@ -461,9 +461,18 @@ export default function AnalyticsTab({
           {opps.length === 0 ? <Empty /> : (
             <ResponsiveContainer width="100%" height={200}>
               <PieChart>
-                <Pie data={[{ name: 'Won', value: wins.length }, { name: 'Lost', value: losses.length }, { name: 'Active', value: active.length }]} cx="50%" cy="50%" outerRadius={75} dataKey="value" label={({ name, percent }) => `${name} ${Math.round((percent ?? 0) * 100)}%`} labelLine={false}>
-                  <Cell fill="#10b981" /><Cell fill="#ef4444" /><Cell fill="#3b82f6" />
-                </Pie>
+                {/* Zero-count slices are dropped (no "Lost 0%" label) and the
+                    radius leaves room so labels don't clip at the card edge. */}
+                <Pie
+                  data={[
+                    { name: 'Won', value: wins.length, fill: '#10b981' },
+                    { name: 'Lost', value: losses.length, fill: '#ef4444' },
+                    { name: 'Active', value: active.length, fill: '#3b82f6' },
+                  ].filter((d) => d.value > 0)}
+                  cx="50%" cy="50%" outerRadius={60} dataKey="value"
+                  label={({ name, percent }) => `${name} ${Math.round((percent ?? 0) * 100)}%`}
+                  labelLine={false}
+                />
                 <Tooltip />
               </PieChart>
             </ResponsiveContainer>
@@ -488,8 +497,8 @@ export default function AnalyticsTab({
           {statusData.length === 0 ? <Empty /> : (
             <ResponsiveContainer width="100%" height={200}>
               <PieChart>
-                <Pie data={statusData.map((s) => ({ name: s.status, value: s.count }))} cx="50%" cy="50%" outerRadius={75} dataKey="value" label={({ name, percent }) => `${name} ${Math.round((percent ?? 0) * 100)}%`} labelLine={false}>
-                  {statusData.map((s, i) => <Cell key={i} fill={STATUS_COLORS[s.status] ?? PALETTE[i % PALETTE.length]} />)}
+                <Pie data={statusData.filter((s) => s.count > 0).map((s) => ({ name: s.status, value: s.count }))} cx="50%" cy="50%" outerRadius={60} dataKey="value" label={({ name, percent }) => `${name} ${Math.round((percent ?? 0) * 100)}%`} labelLine={false}>
+                  {statusData.filter((s) => s.count > 0).map((s, i) => <Cell key={i} fill={STATUS_COLORS[s.status] ?? PALETTE[i % PALETTE.length]} />)}
                 </Pie>
                 <Tooltip />
               </PieChart>
