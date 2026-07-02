@@ -14,8 +14,11 @@ export default function SetupScreen({ email }: { email: string }) {
     setLoading(true)
     setError(null)
 
+    // SECURITY: only the display name is user-settable. Roles live in
+    // app_metadata and are assigned by an admin via the Users tab —
+    // self-assigning a role here would let anyone become admin.
     const { error } = await supabase.auth.updateUser({
-      data: { name: name.trim(), role: 'admin' },
+      data: { name: name.trim() },
     })
 
     setLoading(false)
@@ -59,7 +62,7 @@ export default function SetupScreen({ email }: { email: string }) {
               placeholder="e.g. Israel Green"
               className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-400 focus:bg-white focus:outline-none transition-colors"
             />
-            <p className="mt-1.5 text-xs text-gray-400">You will be set as Admin with full access.</p>
+            <p className="mt-1.5 text-xs text-gray-400">An administrator assigns your access role — contact them if you remain on this screen after saving.</p>
           </div>
 
           {error && (

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { type Opportunity } from './OpportunitiesTable'
 import { MANAGER_TARGETS, MANAGER_COLORS } from './DashboardAnalytics'
 import ManagerDocuments from './ManagerDocuments'
+import { toUSD, fmtUSD } from '@/lib/currency'
 
 const MANAGERS = Object.keys(MANAGER_TARGETS)
 
@@ -45,9 +46,10 @@ export default function ManagersTab({
     const opps     = opportunities.filter(
       (o) => (o.owner as string)?.toLowerCase() === name.toLowerCase(),
     )
-    const forecast = opps.filter((o) => o.stage !== 'Loss').reduce((s, o) => s + (o.value ?? 0), 0)
-    const closed   = opps.filter((o) => o.stage === 'Win').reduce((s, o) => s + ((o as any).final_win_value ?? o.value ?? 0), 0)
-    const open     = opps.filter((o) => !['Win', 'Loss'].includes(o.stage)).reduce((s, o) => s + (o.value ?? 0), 0)
+    // All sums converted to USD so mixed-currency deals aggregate correctly.
+    const forecast = opps.filter((o) => o.stage !== 'Loss').reduce((s, o) => s + toUSD(o.value ?? 0, (o as any).currency), 0)
+    const closed   = opps.filter((o) => o.stage === 'Win').reduce((s, o) => s + toUSD(((o as any).final_win_value ?? o.value ?? 0), (o as any).currency), 0)
+    const open     = opps.filter((o) => !['Win', 'Loss'].includes(o.stage)).reduce((s, o) => s + toUSD(o.value ?? 0, (o as any).currency), 0)
     const target   = managerTargets[name] ?? 0
     const pct      = target > 0 ? Math.min(Math.round((closed / target) * 100), 999) : 0
     const topDeals = [...opps].sort((a, b) => (b.value ?? 0) - (a.value ?? 0)).slice(0, 3)
@@ -188,7 +190,7 @@ function ManagerDrillDown({
                     </span>
                   </td>
                   <td className="px-4 py-3 text-gray-600">{(o.product as string) ?? '—'}</td>
-                  <td className="px-4 py-3 text-right font-bold text-gray-900">{fmtFull(o.value ?? 0)}</td>
+                  <td className="px-4 py-3 text-right font-bold text-gray-900">{fmtUSD(o.value ?? 0, (o as any).currency)}</td>
                   <td className="px-4 py-3 text-gray-500">{(o as any).close_date ?? '—'}</td>
                 </tr>
               ))}
@@ -284,7 +286,7 @@ function ManagerCard({ m, color, onClick }: { m: ManagerRow; color: string; onCl
                     </span>
                   </div>
                   <span className="shrink-0 text-xs font-bold text-gray-900">
-                    {fmtFull(deal.value ?? 0)}
+                    {fmtUSD(deal.value ?? 0, (deal as any).currency)}
                   </span>
                 </li>
               ))}

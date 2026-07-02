@@ -19,6 +19,13 @@ function adminClient() {
   )
 }
 
+// Roles are stored in app_metadata (server-only) — see lib/api-auth.ts.
+const VALID_ROLES = ['admin', 'head_of_sales', 'manager', 'partner'] as const
+
+function isValidRole(role: unknown): role is (typeof VALID_ROLES)[number] {
+  return typeof role === 'string' && (VALID_ROLES as readonly string[]).includes(role)
+}
+
 // GET /api/admin/users — list all users
 export async function GET(req: NextRequest) {
   if (!rateLimit(callerIp(req), 60)) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
@@ -36,7 +43,8 @@ export async function GET(req: NextRequest) {
     id:         u.id,
     email:      u.email,
     name:       u.user_metadata?.name ?? '',
-    role:       u.user_metadata?.role ?? '',
+    // app_metadata is authoritative; user_metadata only as legacy fallback
+    role:       u.app_metadata?.role ?? u.user_metadata?.role ?? '',
     created_at: u.created_at,
   }))
 
@@ -57,6 +65,9 @@ export async function POST(req: NextRequest) {
   if (!email || !password || !name || !role) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
+  if (!isValidRole(role)) {
+    return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
+  }
   if (password.length < 8) {
     return NextResponse.json({ error: 'Password must be at least 8 characters' }, { status: 400 })
   }
@@ -65,7 +76,8 @@ export async function POST(req: NextRequest) {
     email,
     password,
     email_confirm: true,
-    user_metadata: { name, role },
+    user_metadata: { name },
+    app_metadata: { role },
   })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
@@ -122,22 +134,22 @@ export async function PATCH(req: NextRequest) {
   if (password && password.length < 8) {
     return NextResponse.json({ error: 'Password must be at least 8 characters' }, { status: 400 })
   }
+  if (role && !isValidRole(role)) {
+    return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
+  }
 
   // Fetch existing metadata first so we merge rather than replace.
-  // Replacing user_metadata wholesale would wipe fields we don't touch
+  // Replacing metadata wholesale would wipe fields we don't touch
   // (e.g. email_verified) and silently drop name or role on partial updates.
   const { data: existing } = await supabaseAdmin.auth.admin.getUserById(userId)
-  const existingMeta = (existing?.user?.user_metadata as Record<string, unknown>) ?? {}
+  const existingUserMeta = (existing?.user?.user_metadata as Record<string, unknown>) ?? {}
+  const existingAppMeta  = (existing?.user?.app_metadata  as Record<string, unknown>) ?? {}
 
   const updates: Record<string, unknown> = {}
   if (password) updates.password = password
-  if (name || role) {
-    updates.user_metadata = {
-      ...existingMeta,
-      ...(name ? { name } : {}),
-      ...(role ? { role } : {}),
-    }
-  }
+  if (name) updates.user_metadata = { ...existingUserMeta, name }
+  // Role lives in app_metadata (server-only) so users can't self-promote.
+  if (role) updates.app_metadata = { ...existingAppMeta, role }
 
   const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, updates)
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })

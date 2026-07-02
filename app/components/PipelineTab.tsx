@@ -13,6 +13,15 @@ const STAGE_COLORS: Record<string, string> = {
   Loss:        'bg-red-100 text-red-700',
 }
 
+// An open deal whose expected close quarter ("Qn-YYYY") has already passed.
+function isOverdue(o: Opportunity): boolean {
+  if (['Win', 'Loss'].includes(o.stage)) return false
+  const m = String((o as any).close_date ?? '').match(/Q([1-4])-(\d{4})/)
+  if (!m) return false
+  const now = new Date()
+  const nowKey = now.getFullYear() * 4 + Math.floor(now.getMonth() / 3) + 1
+  return Number(m[2]) * 4 + Number(m[1]) < nowKey
+}
 
 type SortDir = 'asc' | 'desc'
 
@@ -448,6 +457,11 @@ export default function PipelineTab({
                   {/* Close Date */}
                   <td className="whitespace-nowrap px-4 py-3 text-gray-600">
                     {(opp as any).close_date ?? '—'}
+                    {isOverdue(opp) && (
+                      <span className="ml-1.5 inline-flex items-center rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-600" title="Expected close quarter has passed — update the close date or the stage">
+                        Overdue
+                      </span>
+                    )}
                   </td>
                   {/* Status */}
                   <td className="whitespace-nowrap px-4 py-3 text-gray-600">

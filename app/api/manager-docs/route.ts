@@ -7,6 +7,10 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { requireUser, requireAdmin } from '@/lib/api-auth'
+import { rateLimit, callerIp } from '@/lib/rate-limit'
+
+const MAX_FILE_BYTES = 20 * 1024 * 1024 // 20 MB
 
 function adminClient() {
   return createClient(
@@ -17,6 +21,12 @@ function adminClient() {
 
 // ── GET ───────────────────────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
+  if (!rateLimit(callerIp(req), 60)) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+
+  // Any authenticated user may list documents (UI is already role-gated).
+  const { user, error: authError } = await requireUser(req)
+  if (authError || !user) return NextResponse.json({ error: authError ?? 'Unauthorized' }, { status: 401 })
+
   const manager = req.nextUrl.searchParams.get('manager')
   if (!manager) return NextResponse.json({ error: 'manager required' }, { status: 400 })
 
@@ -33,6 +43,12 @@ export async function GET(req: NextRequest) {
 
 // ── POST ──────────────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
+  if (!rateLimit(callerIp(req), 20)) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+
+  // Uploads are restricted to admin / head_of_sales (matches the UI).
+  const { user, error: authError } = await requireAdmin(req)
+  if (authError || !user) return NextResponse.json({ error: authError ?? 'Unauthorized' }, { status: 401 })
+
   const form = await req.formData()
   const file    = form.get('file') as File | null
   const manager = form.get('manager') as string | null
@@ -41,6 +57,9 @@ export async function POST(req: NextRequest) {
 
   if (!file || !manager) {
     return NextResponse.json({ error: 'file and manager are required' }, { status: 400 })
+  }
+  if (file.size > MAX_FILE_BYTES) {
+    return NextResponse.json({ error: 'File too large (max 20 MB)' }, { status: 413 })
   }
 
   const sb = adminClient()
@@ -82,6 +101,12 @@ export async function POST(req: NextRequest) {
 
 // ── DELETE ────────────────────────────────────────────────────────────────────
 export async function DELETE(req: NextRequest) {
+  if (!rateLimit(callerIp(req), 20)) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+
+  // Deletions are restricted to admin / head_of_sales (matches the UI).
+  const { user, error: authError } = await requireAdmin(req)
+  if (authError || !user) return NextResponse.json({ error: authError ?? 'Unauthorized' }, { status: 401 })
+
   const id = req.nextUrl.searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 

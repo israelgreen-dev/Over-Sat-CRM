@@ -304,7 +304,7 @@ export default function AnalyticsTab({
           <KPI label="Weighted Pipeline" value={fmtShort(weightedPipeline)}  sub="prob-adjusted"    color="text-indigo-600" bg="bg-indigo-50" />
         </div>
         <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <KPI label="Open Pipeline"    value={fmtShort(totalPipeline)}  sub={`${active.length} active deals`} />
+          <KPI label="Avg. Deal Size"   value={fmtShort(active.length > 0 ? totalPipeline / active.length : 0)} sub="per active deal" />
           <KPI label="Win Rate (count)" value={`${winRateCount}%`}        sub={`${wins.length} of ${opps.length}`} />
           <KPI label="Win Rate (value)" value={`${winRateValue}%`}        sub="won vs total pipeline" />
           <KPI label="Avg. Win Value"   value={fmtShort(avgWin)}          sub="per won deal" />

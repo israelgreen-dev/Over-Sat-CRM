@@ -1,6 +1,13 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { supabase } from '@/lib/supabase'
+
+// The manager-docs API requires a Bearer token (see lib/api-auth.ts).
+async function authHeaders(): Promise<Record<string, string>> {
+  const { data: { session } } = await supabase.auth.getSession()
+  return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}
+}
 
 type Doc = {
   id: string
@@ -57,7 +64,7 @@ export default function ManagerDocuments({
   async function load() {
     setLoading(true)
     try {
-      const res  = await fetch(`/api/manager-docs?manager=${encodeURIComponent(managerName)}`)
+      const res  = await fetch(`/api/manager-docs?manager=${encodeURIComponent(managerName)}`, { headers: await authHeaders() })
       const data = await res.json()
       setDocs(Array.isArray(data) ? data : [])
     } catch {
@@ -81,7 +88,7 @@ export default function ManagerDocuments({
       form.append('manager',     managerName)
       form.append('note',        currentNote)
       form.append('uploaded_by', uploaderName)
-      const res = await fetch('/api/manager-docs', { method: 'POST', body: form })
+      const res = await fetch('/api/manager-docs', { method: 'POST', body: form, headers: await authHeaders() })
       if (!res.ok) { const d = await res.json(); throw new Error(d.error ?? 'Upload failed') }
       setNote('')
       noteRef.current = ''
@@ -98,7 +105,7 @@ export default function ManagerDocuments({
     if (!confirm(`Delete "${fileName}"? This cannot be undone.`)) return
     setDeleting(id)
     try {
-      const res = await fetch(`/api/manager-docs?id=${id}`, { method: 'DELETE' })
+      const res = await fetch(`/api/manager-docs?id=${id}`, { method: 'DELETE', headers: await authHeaders() })
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
         setError(d.error ?? 'Delete failed')

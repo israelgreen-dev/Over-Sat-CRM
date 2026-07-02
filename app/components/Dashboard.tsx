@@ -52,7 +52,7 @@ function weightedFromRows(rows: ProductTargetRow[] | undefined): number {
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
-export default function Dashboard({ opportunities }: { opportunities: Opportunity[] }) {
+export default function Dashboard() {
   // ── Auth state ────────────────────────────────────────────────────────────
   const [authLoading, setAuthLoading] = useState(true)
   const [profile, setProfile]         = useState<UserProfile | null>(null)
@@ -60,12 +60,21 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
   const [viewAs, setViewAs]           = useState<string>(HEAD_OF_SALES)
 
   useEffect(() => {
-    async function loadProfile(userId: string, email: string, metadata: Record<string, string>) {
+    // Role comes from app_metadata (server-assigned, migration 007); the
+    // user_metadata fallback only covers accounts created before the move —
+    // real enforcement happens in RLS and the API routes either way.
+    type SessionUser = {
+      id: string
+      email?: string
+      user_metadata: Record<string, string>
+      app_metadata?: Record<string, unknown>
+    }
+    async function loadProfile(user: SessionUser) {
       const p: UserProfile = {
-        id: userId,
-        email,
-        name: metadata?.name ?? '',
-        role: (metadata?.role ?? '') as UserProfile['role'],
+        id: user.id,
+        email: user.email ?? '',
+        name: user.user_metadata?.name ?? '',
+        role: ((user.app_metadata?.role as string) ?? user.user_metadata?.role ?? '') as UserProfile['role'],
       }
       setProfile(p)
       if (p.role === 'manager' || p.role === 'partner') {
@@ -77,12 +86,12 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
     }
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) loadProfile(session.user.id, session.user.email ?? '', session.user.user_metadata)
+      if (session?.user) loadProfile(session.user)
       else setAuthLoading(false)
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) loadProfile(session.user.id, session.user.email ?? '', session.user.user_metadata)
+      if (session?.user) loadProfile(session.user)
       else { setProfile(null); setAuthLoading(false) }
     })
 
@@ -103,8 +112,30 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
   const [viewerOpen, setViewerOpen]   = useState(false)
   const viewerRef                     = useRef<HTMLDivElement>(null)
 
-  // ── Live opportunities (kept in sync with Pipeline edits/adds) ────────────
-  const [liveOpps, setLiveOpps] = useState<Opportunity[]>(opportunities)
+  // ── Live opportunities (fetched after login; kept in sync with edits) ─────
+  // Fetched client-side through the anon key + session so RLS applies and no
+  // pipeline data is ever embedded in the page before authentication.
+  const [liveOpps, setLiveOpps]         = useState<Opportunity[]>([])
+  const [oppsLoading, setOppsLoading]   = useState(true)
+  const [oppsError, setOppsError]       = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!profile?.role) return
+    let cancelled = false
+    setOppsLoading(true)
+    setOppsError(null)
+    supabase
+      .from('opportunities')
+      .select('*')
+      .order('name', { ascending: true })
+      .then(({ data, error }) => {
+        if (cancelled) return
+        if (error) setOppsError(error.message)
+        else setLiveOpps((data ?? []) as Opportunity[])
+        setOppsLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [profile?.role, profile?.id])
 
   const handleOppUpdated = useCallback((updated: Opportunity) => {
     setLiveOpps((prev) => prev.map((o) => (o.id === updated.id ? updated : o)))
@@ -211,21 +242,26 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
     })
   }, [])
 
-  // ── Persist settings — localStorage (instant) + Supabase (background) ────
+  // ── Persist settings — localStorage + Supabase, debounced ─────────────────
+  // Debounced so typing in a target/territory/probability field doesn't fire
+  // a Supabase upsert on every keystroke; only the settled value is synced.
   useEffect(() => {
     if (!settingsLoaded) return
-    saveSettings({
-      managers,
-      products,
-      headOfSales,
-      partners,
-      targetsByYear,
-      quarterlyTargetsByYear,
-      productTargetRowsByYear,
-      probabilityDefaults,
-      managerColors: managerColorOverrides,
-      managerTerritories,
-    })
+    const t = setTimeout(() => {
+      saveSettings({
+        managers,
+        products,
+        headOfSales,
+        partners,
+        targetsByYear,
+        quarterlyTargetsByYear,
+        productTargetRowsByYear,
+        probabilityDefaults,
+        managerColors: managerColorOverrides,
+        managerTerritories,
+      })
+    }, 600)
+    return () => clearTimeout(t)
   }, [settingsLoaded, managers, products, headOfSales, partners, targetsByYear, quarterlyTargetsByYear, productTargetRowsByYear, probabilityDefaults, managerColorOverrides, managerTerritories])
 
   const overallTarget = useMemo(
@@ -409,6 +445,26 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
   }
   if (!profile) return <LoginScreen />
   if (!profile.role) return <SetupScreen email={profile.email} />
+  if (oppsLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-900">
+        <p className="text-sm text-slate-400">Loading pipeline…</p>
+      </div>
+    )
+  }
+  if (oppsError) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-slate-900 p-8">
+        <p className="text-sm text-red-400">Failed to load opportunities: {oppsError}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="rounded-lg bg-slate-700 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-600 transition-colors"
+        >
+          Retry
+        </button>
+      </div>
+    )
+  }
 
   return (
     <ErrorBoundary>
@@ -796,11 +852,15 @@ export default function Dashboard({ opportunities }: { opportunities: Opportunit
 
 // ── CSV export ─────────────────────────────────────────────────────────────────
 function exportCSV(opportunities: Opportunity[]) {
-  const headers = ['Name','Account','Owner','Stage','Status','Product','Country','Value','Loss Reason','Loss Description']
+  const headers = ['Name','Account','Owner','Stage','Status','Product','Country','Close Date','Currency','Value','Value (USD)','Probability %','Win Value','Loss Reason','Loss Description']
   const rows    = opportunities.map((o) => [
     o.name ?? '', o.customer_name ?? '', (o.owner as string) ?? '',
     o.stage ?? '', (o.status as string) ?? '', (o.product as string) ?? '',
-    (o.country as string) ?? '', o.value ?? '',
+    (o.country as string) ?? '', (o as any).close_date ?? '',
+    (o as any).currency ?? 'USD', o.value ?? '',
+    o.value != null ? Math.round(toUSD(o.value, (o as any).currency)) : '',
+    (o as any).probability ?? '',
+    (o as any).final_win_value ?? '',
     o.loss_reason ?? '', o.loss_description ?? '',
   ])
   const csv  = [headers, ...rows].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
