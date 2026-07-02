@@ -281,7 +281,10 @@ function ResizableDialog({ onClose, children }: { onClose: () => void; children:
   ]
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+    // Deliberately NOT closing on backdrop click: this dialog holds data
+    // entry, and a stray click outside must never dismiss the user's work.
+    // Closing happens only via the explicit ✕ / Save buttons (guarded).
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div
         ref={panelRef}
         className={`relative flex w-full flex-col rounded-2xl bg-white shadow-2xl ${size ? '' : 'max-w-3xl'}`}
