@@ -6,7 +6,13 @@ import {
   Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
 import { toUSD } from '@/lib/currency'
-import { type Opportunity, effectiveProbability, generateQuarters } from './OpportunitiesTable'
+import { type Opportunity, effectiveProbability, generateQuarters, getProductLines } from './OpportunitiesTable'
+
+// Chronological sort key for "Qn-YYYY" quarter labels.
+function quarterSortKey(q: string): number {
+  const m = q.match(/Q([1-4])-(\d{4})/)
+  return m ? Number(m[2]) * 4 + Number(m[1]) : 0
+}
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 const currencyFmt = new Intl.NumberFormat('en-US', {
@@ -64,9 +70,25 @@ function ProjectionTab({
   opportunities: Opportunity[]
   probabilityDefaults?: Record<string, number>
 }) {
-  // The reporting horizon: current quarter + the following 7 (8 total),
-  // matching the quarter inputs in the opportunity modal.
-  const quarters = useMemo(() => generateQuarters(8), [])
+  // Lost deals don't project income; Win deals keep projecting future income.
+  const projectable = useMemo(
+    () => opportunities.filter((o) => o.stage !== 'Loss'),
+    [opportunities],
+  )
+
+  // The reporting horizon: current quarter + the following 7 (8 total) as a
+  // base, EXTENDED with any later quarter that actually has income allocated.
+  // (Income entry starts at a deal's close-date quarter, which can push
+  // allocations beyond the default window — those must not vanish here.)
+  const quarters = useMemo(() => {
+    const set = new Set<string>(generateQuarters(8))
+    projectable.forEach((o) => {
+      Object.entries(quarterlyIncomes(o)).forEach(([q, v]) => {
+        if ((v ?? 0) > 0 && /^Q[1-4]-\d{4}$/.test(q)) set.add(q)
+      })
+    })
+    return Array.from(set).sort((a, b) => quarterSortKey(a) - quarterSortKey(b))
+  }, [projectable])
 
   // ── Filters ───────────────────────────────────────────────────────────────
   const [filterText, setFilterText]       = useState('')
@@ -101,18 +123,13 @@ function ProjectionTab({
     [quarters, filterYear, filterQuarter],
   )
 
-  // Lost deals don't project income; Win deals keep projecting future income.
-  const projectable = useMemo(
-    () => opportunities.filter((o) => o.stage !== 'Loss'),
-    [opportunities],
-  )
-
   const managerOptions = useMemo(
     () => Array.from(new Set(projectable.map((o) => (o.owner as string) ?? '').filter(Boolean))).sort(),
     [projectable],
   )
+  // A deal can consist of several products — offer each individual product.
   const productOptions = useMemo(
-    () => Array.from(new Set(projectable.map((o) => (o.product as string) ?? '').filter(Boolean))).sort(),
+    () => Array.from(new Set(projectable.flatMap((o) => getProductLines(o).map((l) => l.product)).filter(Boolean))).sort(),
     [projectable],
   )
   const stageOptions = ['Discovery', 'Proposal', 'Negotiation', 'Win']
@@ -128,8 +145,8 @@ function ProjectionTab({
           ((o.product as string) ?? '').toLowerCase().includes(q)
         if (!hit) return false
       }
-      if (filterManager && (o.owner   as string)?.toLowerCase() !== filterManager.toLowerCase()) return false
-      if (filterProduct && (o.product as string)?.toLowerCase() !== filterProduct.toLowerCase()) return false
+      if (filterManager && (o.owner as string)?.toLowerCase() !== filterManager.toLowerCase()) return false
+      if (filterProduct && !getProductLines(o).some((l) => l.product.toLowerCase() === filterProduct.toLowerCase())) return false
       if (filterStage   && o.stage !== filterStage)                                              return false
       return true
     }),
@@ -210,7 +227,7 @@ function ProjectionTab({
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-base font-bold text-gray-900">Sales Projection — Next 8 Quarters</h2>
+          <h2 className="text-base font-bold text-gray-900">Sales Projection — {quarters[0]} to {quarters[quarters.length - 1]}</h2>
           <p className="mt-0.5 text-sm text-gray-400">
             Planned income per quarter, from the &quot;Planned Income by Quarter&quot; breakdown on each opportunity.
             Lost deals are excluded. Print (header button) or export CSV for a report.
@@ -259,7 +276,7 @@ function ProjectionTab({
           <p className="tabular-nums text-3xl font-bold leading-none text-slate-900">{fmtFull(grandTotal)}</p>
           <p className="mt-2 text-xs text-gray-400">
             {visibleQuarters.length === quarters.length
-              ? 'over the next 8 quarters'
+              ? `over the next ${quarters.length} quarters`
               : `over ${visibleQuarters.length} quarter${visibleQuarters.length !== 1 ? 's' : ''}: ${visibleQuarters.join(', ')}`}
             {anyFilterActive ? ' (filtered)' : ''}
           </p>

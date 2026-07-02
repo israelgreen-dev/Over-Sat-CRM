@@ -338,6 +338,15 @@ export function Modal({
   // Amounts remain the stored source of truth either way.
   const [qiMode, setQiMode]     = useState<'amount' | 'percent'>('amount')
 
+  // Snapshot of the loaded draft — used to warn before discarding edits.
+  const initialDraft = useRef(JSON.stringify(toDraft(opportunity)))
+  const isDirty = JSON.stringify(draft) !== initialDraft.current
+
+  function guardedClose() {
+    if (isDirty && !confirm('You have unsaved changes. Discard them?')) return
+    onClose()
+  }
+
   async function handleDelete() {
     if (!confirm(`Permanently delete "${opportunity.name}"? This cannot be undone.`)) return
     setDeleting(true)
@@ -423,7 +432,7 @@ export function Modal({
   }
 
   return (
-    <ResizableDialog onClose={onClose}>
+    <ResizableDialog onClose={guardedClose}>
         {/* ── Fixed Header ──────────────────────────────────────────── */}
         <div className="shrink-0 rounded-t-2xl border-b border-zinc-100 bg-white px-6 py-4">
           <div className="flex items-center justify-between gap-4">
@@ -467,7 +476,7 @@ export function Modal({
                 {saving ? 'Saving…' : 'Save & Close'}
               </button>
               <button
-                onClick={onClose}
+                onClick={guardedClose}
                 aria-label="Close"
                 className="ml-1 flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 transition-colors"
               >
@@ -831,8 +840,15 @@ export function AddOpportunityModal({
   const inputCls  = 'w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 focus:border-blue-400 focus:bg-white focus:outline-none transition-colors'
   const selectCls = inputCls
 
+  // Warn before closing if the user has started filling in the form.
+  const formDirty = form.name.trim() !== '' || form.customer_name.trim() !== '' || form.product_lines.length > 0
+  function guardedClose() {
+    if (formDirty && !confirm('Discard this new opportunity?')) return
+    onClose()
+  }
+
   return (
-    <ResizableDialog onClose={onClose}>
+    <ResizableDialog onClose={guardedClose}>
         {/* ── Fixed header ────────────────────────────────────────────────── */}
         <div className="shrink-0 rounded-t-2xl border-b border-zinc-100 bg-white px-6 py-4">
           <div className="flex items-center justify-between gap-4">
@@ -857,7 +873,7 @@ export function AddOpportunityModal({
                 {saving ? 'Saving…' : 'Save Opportunity'}
               </button>
               <button
-                onClick={onClose}
+                onClick={guardedClose}
                 aria-label="Close"
                 className="ml-1 flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 transition-colors"
               >

@@ -31,11 +31,21 @@ export async function POST(req: NextRequest) {
 
   const { email, name, role } = await req.json()
   if (!email || !name || !role) return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+  if (!['admin', 'head_of_sales', 'manager', 'partner'].includes(role)) {
+    return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
+  }
 
   const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-    data: { name, role },
+    data: { name },
   })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+
+  // Role lives in app_metadata (server-only) so users can't self-promote.
+  const { error: roleError } = await supabaseAdmin.auth.admin.updateUserById(data.user.id, {
+    app_metadata: { role },
+  })
+  if (roleError) return NextResponse.json({ error: roleError.message }, { status: 400 })
+
   return NextResponse.json({ success: true, user: { id: data.user.id, email, name, role } })
 }
