@@ -36,7 +36,16 @@ const COLUMNS: { label: string; field: string; numeric?: boolean }[] = [
   { label: 'Stage',          field: 'stage' },
   { label: 'Close Date',     field: 'close_date' },
   { label: 'Status',         field: 'status' },
+  { label: 'Updated',        field: 'updated_at' },
 ]
+
+// Compact display for the Updated column ("12 Jun 25").
+const updatedFmt = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })
+function fmtUpdated(ts: unknown): string {
+  if (!ts) return '—'
+  const d = new Date(String(ts))
+  return Number.isNaN(d.getTime()) ? '—' : updatedFmt.format(d)
+}
 
 function FilterSelect({
   label, value, onChange, placeholder, options,
@@ -466,6 +475,13 @@ export default function PipelineTab({
                   {/* Status */}
                   <td className="whitespace-nowrap px-4 py-3 text-gray-600">
                     {(opp as any).status ?? '—'}
+                  </td>
+                  {/* Last updated (falls back to created date for old rows) */}
+                  <td
+                    className="whitespace-nowrap px-4 py-3 text-xs text-gray-400"
+                    title={(opp as any).updated_at ? `Last updated ${new Date(String((opp as any).updated_at)).toLocaleString()}` : undefined}
+                  >
+                    {fmtUpdated((opp as any).updated_at ?? (opp as any).created_at)}
                   </td>
                   {/* Actions — delete */}
                   {canDelete && (

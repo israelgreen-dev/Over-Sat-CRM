@@ -391,16 +391,20 @@ export function Modal({
       loss_description:  isLost ? draft.loss_description : null,
       probability:       draft.probability,
       quarterly_incomes: draft.quarterly_incomes,
+      // The DB trigger (migration 008) overwrites this with server time; the
+      // client value just keeps the local state fresh right after saving.
+      updated_at:        new Date().toISOString(),
     }
 
     // Progressive fallback: strip columns that don't exist in older DB schemas.
     const payload: Record<string, unknown> = { ...base }
     let sbError: { message: string } | null = null
 
-    for (let attempt = 0; attempt < 6; attempt++) {
+    for (let attempt = 0; attempt < 7; attempt++) {
       const { error } = await supabase.from('opportunities').update(payload).eq('id', opportunity.id)
       sbError = error
       if (!error) break
+      if (error.message?.includes('updated_at'))        { delete payload.updated_at;        continue }
       if (error.message?.includes('product_lines'))     { delete payload.product_lines;     continue }
       if (error.message?.includes('quarterly_incomes')) { delete payload.quarterly_incomes; continue }
       if (error.message?.includes('probability'))       { delete payload.probability;       continue }
@@ -449,7 +453,10 @@ export function Modal({
                 <StageBadge stage={draft.stage} />
                 {draft.status && <StatusBadge status={draft.status} />}
                 {(opportunity as any).created_at && (
-                  <span className="text-xs text-zinc-400">{formatTimestamp((opportunity as any).created_at)}</span>
+                  <span className="text-xs text-zinc-400" title="Created">Created {formatTimestamp((opportunity as any).created_at)}</span>
+                )}
+                {(opportunity as any).updated_at && (opportunity as any).updated_at !== (opportunity as any).created_at && (
+                  <span className="text-xs text-zinc-400" title="Last updated">· Updated {formatTimestamp((opportunity as any).updated_at)}</span>
                 )}
               </div>
             </div>
