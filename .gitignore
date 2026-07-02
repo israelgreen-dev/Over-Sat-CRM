@@ -44,3 +44,6 @@ next-env.d.ts
 # playwright
 test-results/
 playwright-report/
+
+# local scratch (not part of the app)
+crm-beginner/

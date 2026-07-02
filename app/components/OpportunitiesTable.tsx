@@ -244,6 +244,21 @@ function ResizableDialog({ onClose, children }: { onClose: () => void; children:
   const panelRef = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState<{ w: number; h: number } | null>(null)
 
+  // Escape closes the dialog (callers pass a guarded close that warns about
+  // unsaved changes). Backdrop clicks intentionally do NOT close it.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== 'Escape') return
+      // Esc inside a field cancels that field (search dropdowns etc.),
+      // not the whole dialog.
+      const t = e.target as HTMLElement | null
+      if (t && ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)) return
+      onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
   function startResize(e: React.PointerEvent, corner: 'nw' | 'ne' | 'sw' | 'se') {
     e.preventDefault()
     e.stopPropagation()
@@ -332,7 +347,7 @@ export function Modal({
   managers?: string[]
   probabilityDefaults?: Record<string, number>
 }) {
-  const [modalTab, setModalTab] = useState<'details' | 'notes' | 'documents' | 'contacts'>('details')
+  const [modalTab, setModalTab] = useState<'details' | 'notes' | 'documents' | 'contacts' | 'history'>('details')
   const [draft, setDraft]       = useState<Draft>(toDraft(opportunity))
   const [saving, setSaving]     = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -532,7 +547,7 @@ export function Modal({
 
           {/* Tab bar */}
           <div className="mt-3 flex gap-0.5 border-b border-zinc-100">
-            {(['details', 'contacts', 'documents', 'notes'] as const).map((t) => (
+            {(['details', 'contacts', 'documents', 'notes', 'history'] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setModalTab(t)}
@@ -770,6 +785,7 @@ export function Modal({
           {modalTab === 'notes'     && <NotesPanel     opportunityId={opportunity.id}          />}
           {modalTab === 'documents' && <DocumentsPanel opportunityId={String(opportunity.id)} />}
           {modalTab === 'contacts'  && <ContactsPanel  opportunityId={String(opportunity.id)} />}
+          {modalTab === 'history'   && <HistoryPanel   opportunityId={String(opportunity.id)} />}
 
         </div>
     </ResizableDialog>
@@ -783,6 +799,7 @@ export function AddOpportunityModal({
   managers: managersProp,
   defaultOwner = '',
   probabilityDefaults = DEFAULT_PROBABILITY,
+  existingAccounts = [],
 }: {
   onClose: () => void
   onAdded: (opp: Opportunity) => void
@@ -792,6 +809,8 @@ export function AddOpportunityModal({
   managers?: string[]
   defaultOwner?: string
   probabilityDefaults?: Record<string, number>
+  /** Account names already present in the pipeline — used to warn about duplicates. */
+  existingAccounts?: string[]
 }) {
   const [form, setForm] = useState({
     name: '', customer_name: '', country: '', owner: defaultOwner,
@@ -934,6 +953,20 @@ export function AddOpportunityModal({
               <Field label="Account Name">
                 <input className={inputCls} placeholder="Company or account"
                   value={form.customer_name} onChange={(e) => setForm((f) => ({ ...f, customer_name: e.target.value }))} />
+                {(() => {
+                  const q = form.customer_name.trim().toLowerCase()
+                  if (!q) return null
+                  const dupes = existingAccounts.filter((a) => a?.trim().toLowerCase() === q).length
+                  if (dupes === 0) return null
+                  return (
+                    <p className="mt-1 flex items-center gap-1 text-xs text-amber-600">
+                      <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                      </svg>
+                      {dupes} deal{dupes !== 1 ? 's' : ''} already exist{dupes === 1 ? 's' : ''} for this account — check the pipeline before creating a duplicate.
+                    </p>
+                  )
+                })()}
               </Field>
 
               <Field label="Sales Manager">
@@ -1137,6 +1170,94 @@ function ProductLinesEditor({
         </button>
         <span className="text-sm font-bold text-zinc-900">Total: {cfmt(linesTotal(lines))}</span>
       </div>
+    </div>
+  )
+}
+
+// ── History Panel ─────────────────────────────────────────────────────────────
+// Read-only audit trail (populated by the DB trigger from migration 009).
+type AuditEntry = {
+  id: number
+  action: string
+  changed_by: string | null
+  changed_at: string
+  changes: Record<string, { old: unknown; new: unknown }>
+}
+
+const FIELD_LABELS: Record<string, string> = {
+  name: 'Name', customer_name: 'Account', owner: 'Sales Manager', stage: 'Stage',
+  status: 'Status', product: 'Product', country: 'Country', currency: 'Currency',
+  close_date: 'Close Date', value: 'Value', final_win_value: 'Win Value',
+  probability: 'Probability %', loss_reason: 'Loss Reason', loss_description: 'Loss Description',
+}
+
+function fmtAuditValue(v: unknown): string {
+  if (v === null || v === undefined || v === '') return '—'
+  if (typeof v === 'number') return v.toLocaleString('en-US')
+  return String(v)
+}
+
+function HistoryPanel({ opportunityId }: { opportunityId: string }) {
+  const [entries, setEntries] = useState<AuditEntry[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError]     = useState<string | null>(null)
+
+  useEffect(() => {
+    supabase
+      .from('opportunity_audit')
+      .select('*')
+      .eq('opportunity_id', opportunityId)
+      .order('changed_at', { ascending: false })
+      .limit(100)
+      .then(({ data, error }) => {
+        if (error) setError(error.message)
+        else setEntries((data ?? []) as AuditEntry[])
+        setLoading(false)
+      })
+  }, [opportunityId])
+
+  if (loading) return <p className="py-8 text-center text-sm text-zinc-400">Loading history…</p>
+  if (error) {
+    return (
+      <p className="py-8 text-center text-sm text-zinc-400">
+        History is not available yet{error.includes('does not exist') || error.includes('schema cache') ? ' — run migration 009 in Supabase to enable the audit trail.' : `: ${error}`}
+      </p>
+    )
+  }
+  if (entries.length === 0) {
+    return <p className="py-8 text-center text-sm text-zinc-400">No changes recorded yet. Edits made from now on appear here automatically.</p>
+  }
+
+  return (
+    <div className="space-y-3">
+      {entries.map((e) => (
+        <div key={e.id} className="rounded-xl border border-zinc-100 bg-zinc-50/60 px-4 py-3">
+          <div className="mb-1.5 flex flex-wrap items-center gap-2 text-xs text-zinc-400">
+            <span className={`rounded-full px-2 py-0.5 font-semibold ${
+              e.action === 'INSERT' ? 'bg-green-100 text-green-700'
+              : e.action === 'DELETE' ? 'bg-red-100 text-red-600'
+              : 'bg-blue-100 text-blue-700'
+            }`}>
+              {e.action === 'INSERT' ? 'Created' : e.action === 'DELETE' ? 'Deleted' : 'Updated'}
+            </span>
+            <span className="font-medium text-zinc-600">{e.changed_by || 'Unknown'}</span>
+            <span>·</span>
+            <span className="tabular-nums">{formatTimestamp(e.changed_at)}</span>
+          </div>
+          {e.action === 'UPDATE' && (
+            <ul className="space-y-1">
+              {Object.entries(e.changes ?? {}).map(([field, ch]) => (
+                <li key={field} className="text-sm text-zinc-700">
+                  <span className="font-semibold">{FIELD_LABELS[field] ?? field}:</span>{' '}
+                  <span className="text-zinc-400 line-through">{fmtAuditValue(ch?.old)}</span>
+                  {' → '}
+                  <span className="font-medium text-zinc-900">{fmtAuditValue(ch?.new)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ))}
     </div>
   )
 }

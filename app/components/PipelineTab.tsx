@@ -13,6 +13,18 @@ const STAGE_COLORS: Record<string, string> = {
   Loss:        'bg-red-100 text-red-700',
 }
 
+// Days an open deal has been sitting in its current stage (migration 009
+// tracks stage_changed_at; older rows fall back to created_at).
+function daysInStage(o: Opportunity): number | null {
+  if (['Win', 'Loss'].includes(o.stage)) return null
+  const ts = (o as any).stage_changed_at ?? (o as any).created_at
+  if (!ts) return null
+  const d = new Date(String(ts))
+  if (Number.isNaN(d.getTime())) return null
+  return Math.floor((Date.now() - d.getTime()) / 86_400_000)
+}
+const STALE_DAYS = 60
+
 // An open deal whose expected close quarter ("Qn-YYYY") has already passed.
 function isOverdue(o: Opportunity): boolean {
   if (['Win', 'Loss'].includes(o.stage)) return false
@@ -411,7 +423,10 @@ export default function PipelineTab({
                       </button>
                     </div>
                   ) : (
-                    <p className="text-gray-400">No opportunities found.</p>
+                    <div>
+                      <p className="text-sm font-medium text-gray-500">No opportunities yet.</p>
+                      <p className="mt-1 text-xs text-gray-400">Click the orange <span className="font-semibold text-orange-500">+ New</span> button in the top bar to add your first deal.</p>
+                    </div>
                   )}
                 </td>
               </tr>
@@ -462,6 +477,18 @@ export default function PipelineTab({
                     >
                       {opp.stage ?? '—'}
                     </span>
+                    {(() => {
+                      const days = daysInStage(opp)
+                      if (days == null || days < STALE_DAYS) return null
+                      return (
+                        <span
+                          className="ml-1.5 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700"
+                          title={`${days} days in ${opp.stage} — consider following up or updating the stage`}
+                        >
+                          Stale
+                        </span>
+                      )
+                    })()}
                   </td>
                   {/* Close Date */}
                   <td className="whitespace-nowrap px-4 py-3 text-gray-600">
@@ -530,6 +557,7 @@ export default function PipelineTab({
         <AddOpportunityModal
           products={products}
           managers={managers}
+          existingAccounts={opportunities.map((o) => (o.customer_name as string) ?? '')}
           defaultOwner={defaultOwner}
           probabilityDefaults={probabilityDefaults}
           onClose={() => onAddFormOpenChange?.(false)}

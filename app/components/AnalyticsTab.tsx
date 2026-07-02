@@ -498,6 +498,39 @@ export default function AnalyticsTab({
         </Section>
       </div>
 
+      {/* ── Loss review ───────────────────────────────────────────────────── */}
+      <Section title="Loss Review" subtitle="Every lost deal with its reason — the post-mortem list">
+        {losses.length === 0 ? (
+          <p className="py-8 text-center text-sm text-gray-400">No lost deals in this period. 🎉</p>
+        ) : (
+          <div className="overflow-x-auto rounded-lg border border-gray-200">
+            <table className="min-w-full divide-y divide-gray-200 text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  {['Opportunity', 'Account', 'Manager', 'Value', 'Reason', 'Details'].map((h) => (
+                    <th key={h} className={`whitespace-nowrap px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 ${h === 'Value' ? 'text-right' : 'text-left'}`}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 bg-white">
+                {[...losses].sort((a, b) => pipeVal(b) - pipeVal(a)).map((o) => (
+                  <tr key={o.id} className="hover:bg-gray-50">
+                    <td className="max-w-[200px] truncate px-4 py-2.5 font-medium text-gray-900">{o.name ?? '—'}</td>
+                    <td className="whitespace-nowrap px-4 py-2.5 text-gray-600">{o.customer_name ?? '—'}</td>
+                    <td className="whitespace-nowrap px-4 py-2.5 text-gray-600">{(o.owner as string) ?? '—'}</td>
+                    <td className="whitespace-nowrap px-4 py-2.5 text-right font-semibold tabular-nums text-red-500">{fmtShort(pipeVal(o))}</td>
+                    <td className="whitespace-nowrap px-4 py-2.5">
+                      <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600">{o.loss_reason ?? 'Unknown'}</span>
+                    </td>
+                    <td className="max-w-[280px] truncate px-4 py-2.5 text-xs text-gray-500" title={o.loss_description ?? ''}>{o.loss_description ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Section>
+
       {/* ── Product breakdown ─────────────────────────────────────────────── */}
       <Section title="Performance by Product" subtitle="Pipeline, wins, and win rate per product">
         {prodData.length === 0 ? <Empty /> : (

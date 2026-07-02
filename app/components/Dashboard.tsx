@@ -15,6 +15,7 @@ import UsersTab from './UsersTab'
 import ErrorBoundary from './ErrorBoundary'
 import LoginScreen from './LoginScreen'
 import SetupScreen from './SetupScreen'
+import ResetPasswordScreen from './ResetPasswordScreen'
 import { loadSettings, saveSettings } from '@/lib/settings'
 
 // ── Module-level constants ─────────────────────────────────────────────────────
@@ -56,6 +57,9 @@ export default function Dashboard() {
   // ── Auth state ────────────────────────────────────────────────────────────
   const [authLoading, setAuthLoading] = useState(true)
   const [profile, setProfile]         = useState<UserProfile | null>(null)
+  // True while the user arrived via a password-recovery link and must set a
+  // new password before entering the app.
+  const [passwordRecovery, setPasswordRecovery] = useState(false)
   // Declared before the auth effect below, which sets it when a session loads.
   const [viewAs, setViewAs]           = useState<string>(HEAD_OF_SALES)
 
@@ -90,7 +94,8 @@ export default function Dashboard() {
       else setAuthLoading(false)
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
       if (session?.user) loadProfile(session.user)
       else { setProfile(null); setAuthLoading(false) }
     })
@@ -443,6 +448,7 @@ export default function Dashboard() {
       </div>
     )
   }
+  if (passwordRecovery) return <ResetPasswordScreen onDone={() => setPasswordRecovery(false)} />
   if (!profile) return <LoginScreen />
   if (!profile.role) return <SetupScreen email={profile.email} />
   if (oppsLoading) {
@@ -488,7 +494,7 @@ export default function Dashboard() {
 
       {/* ── Top Header ──────────────────────────────────────────────────────── */}
       <header className="no-print sticky top-0 z-40 border-b border-gray-200 bg-white shadow-sm">
-        <div className="mx-auto flex max-w-screen-xl items-center justify-between px-5 py-3">
+        <div className="mx-auto flex max-w-screen-xl flex-wrap items-center justify-between gap-y-2 px-5 py-3">
 
           {/* Logo + title — no white container needed on white header */}
           <button
@@ -632,13 +638,14 @@ export default function Dashboard() {
 
       {/* ── Pill Navigation ─────────────────────────────────────────────────── */}
       <div className="no-print sticky top-[68px] z-30 border-b border-gray-200 bg-white shadow-sm">
-        <div className="mx-auto flex max-w-screen-xl items-center gap-4 px-6 py-3">
-          <div className="inline-flex gap-1 rounded-2xl border border-gray-200 bg-gray-100 p-1">
+        {/* overflow-x-auto keeps all tabs reachable on phone-width screens */}
+        <div className="mx-auto flex max-w-screen-xl items-center gap-4 overflow-x-auto px-6 py-3">
+          <div className="inline-flex shrink-0 gap-1 rounded-2xl border border-gray-200 bg-gray-100 p-1">
             {tabs.map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`rounded-xl px-5 py-2 text-sm font-medium transition-all duration-150 ${
+                className={`whitespace-nowrap rounded-xl px-5 py-2 text-sm font-medium transition-all duration-150 ${
                   safeTab === tab
                     ? 'bg-orange-500 text-white shadow-sm'
                     : 'text-gray-500 hover:text-gray-800'
@@ -648,7 +655,7 @@ export default function Dashboard() {
               </button>
             ))}
           </div>
-          <span className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-semibold text-gray-500 shadow-sm">
+          <span className="hidden whitespace-nowrap rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-semibold text-gray-500 shadow-sm sm:inline-block">
             {isHoS ? `👁 Full Access — ${headOfSales}` : isPartner ? `🤝 Partner View — ${viewAs}` : `🔒 Manager View — ${viewAs}`}
           </span>
         </div>
@@ -839,7 +846,7 @@ export default function Dashboard() {
           attribute as a potential mismatch. Suppressing on the wrapping span is
           the idiomatic fix — it doesn't suppress anything else in the tree. */}
       <footer className="border-t border-gray-200 bg-white px-6 py-3 text-center text-xs text-gray-400">
-        Over-Sat CRM &nbsp;·&nbsp; Version 1.0 MVP &nbsp;·&nbsp;{' '}
+        Over-Sat CRM &nbsp;·&nbsp; Version 1.0 &nbsp;·&nbsp;{' '}
         <span suppressHydrationWarning>
           {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}
         </span>

@@ -7,6 +7,7 @@
  */
 
 import { Component, type ReactNode } from 'react'
+import { supabase } from '@/lib/supabase'
 
 interface Props  { children: ReactNode; fallback?: ReactNode }
 interface State  { hasError: boolean; message: string }
@@ -23,9 +24,23 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: unknown, info: { componentStack: string }) {
-    // Log to console in development; swap for a real error-tracking service
-    // (e.g. Sentry) in production.
     console.error('[ErrorBoundary]', error, info.componentStack)
+
+    // Self-hosted error monitoring: record the crash in Supabase so admins
+    // can review production errors (client_errors table, migration 009).
+    // Fire-and-forget — a failed report must never cause its own error.
+    void (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        await supabase.from('client_errors').insert({
+          user_name:  session?.user?.user_metadata?.name ?? session?.user?.email ?? 'anonymous',
+          message:    error instanceof Error ? error.message : String(error),
+          stack:      `${error instanceof Error ? error.stack ?? '' : ''}\n---\n${info.componentStack}`.slice(0, 8000),
+          url:        typeof window !== 'undefined' ? window.location.href : '',
+          user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+        })
+      } catch { /* never rethrow from the error reporter */ }
+    })()
   }
 
   handleReset = () => this.setState({ hasError: false, message: '' })
