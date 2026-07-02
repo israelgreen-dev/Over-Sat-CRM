@@ -339,8 +339,17 @@ export function Modal({
   const [qiMode, setQiMode]     = useState<'amount' | 'percent'>('amount')
 
   // Snapshot of the loaded draft — used to warn before discarding edits.
-  const initialDraft = useRef(JSON.stringify(toDraft(opportunity)))
-  const isDirty = JSON.stringify(draft) !== initialDraft.current
+  // Product-line ids are regenerated randomly on every load (newProductLine),
+  // so they must be excluded from the comparison — otherwise an untouched
+  // deal would always look dirty.
+  function draftSignature(d: Draft): string {
+    return JSON.stringify({
+      ...d,
+      product_lines: d.product_lines.map(({ product, quantity, price }) => ({ product, quantity, price })),
+    })
+  }
+  const initialDraft = useRef(draftSignature(toDraft(opportunity)))
+  const isDirty = draftSignature(draft) !== initialDraft.current
 
   function guardedClose() {
     if (isDirty && !confirm('You have unsaved changes. Discard them?')) return
