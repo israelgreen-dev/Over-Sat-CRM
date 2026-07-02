@@ -505,7 +505,7 @@ export default function Dashboard() {
             <div className="flex h-10 w-36 shrink-0 items-center overflow-hidden">
               <img src="/OS-Logo.png" alt="Over-Sat Logo" className="h-full w-full object-contain" />
             </div>
-            <span className="text-base font-bold text-gray-900">Over-Sat CRM</span>
+            <span className="text-xl font-bold text-gray-900">CRM</span>
           </button>
 
           {/* Controls */}
