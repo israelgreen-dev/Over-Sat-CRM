@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import { type Opportunity, SearchableSelect, COUNTRIES, OPPORTUNITY_TYPES } from './OpportunitiesTable'
+import { type Opportunity, SearchableSelect, COUNTRIES, OPPORTUNITY_TYPES, LEAD_SOURCES, PRIORITIES, PRIORITY_ICONS } from './OpportunitiesTable'
 
 /**
  * LeadsTab — a lightweight pre-pipeline stage.
@@ -41,13 +41,8 @@ const STATUS_COLORS: Record<string, string> = {
   Converted: 'bg-emerald-100 text-emerald-700',
 }
 
-export const LEAD_SOURCES = [
-  'Website', 'Exhibition', 'Partner', 'Referral', 'LinkedIn',
-  'Cold Outreach', 'Existing Customer', 'Distributor', 'Other',
-] as const
-
-const PRIORITIES = ['High', 'Medium', 'Low'] as const
-const PRIORITY_ICONS: Record<string, string> = { High: '🔴', Medium: '🟡', Low: '🟢' }
+// LEAD_SOURCES / PRIORITIES / PRIORITY_ICONS are shared with opportunities
+// and live in OpportunitiesTable.
 
 type LeadForm = {
   account: string
@@ -260,14 +255,20 @@ export default function LeadsTab({
       loss_reason: null,
       loss_description: null,
       opportunity_type: converting.opportunity_type || null,
+      website: converting.website || null,
+      source: converting.source || null,
+      priority: converting.priority || null,
     }
     let data: any[] | null = null
     let error: { message: string } | null = null
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let attempt = 0; attempt < 5; attempt++) {
       const res = await supabase.from('opportunities').insert([oppPayload]).select()
       data = res.data; error = res.error
       if (!res.error) break
       if (res.error.message?.includes('opportunity_type')) { delete oppPayload.opportunity_type; continue }
+      if (res.error.message?.includes('website'))           { delete oppPayload.website;          continue }
+      if (res.error.message?.includes('source'))            { delete oppPayload.source;           continue }
+      if (res.error.message?.includes('priority'))          { delete oppPayload.priority;         continue }
       break
     }
     if (error) { setBusy(false); alert(`Convert failed: ${error.message}`); return }

@@ -26,6 +26,9 @@ type Draft = {
   product_lines: ProductLine[]
   country: string
   opportunity_type: string
+  website: string
+  source: string
+  priority: string
   currency: string
   value: number | null
   close_date: string
@@ -129,6 +132,15 @@ export const OPPORTUNITY_TYPES = [
   'Direct Customer', 'Partner', 'Distributor', 'Integrator',
   'Government', 'Military', 'Law Enforcement',
 ] as const
+
+// Shared by leads and opportunities so both entry paths capture equal data.
+export const LEAD_SOURCES = [
+  'Website', 'Exhibition', 'Partner', 'Referral', 'LinkedIn',
+  'Cold Outreach', 'Existing Customer', 'Distributor', 'Other',
+] as const
+
+export const PRIORITIES = ['High', 'Medium', 'Low'] as const
+export const PRIORITY_ICONS: Record<string, string> = { High: '🔴', Medium: '🟡', Low: '🟢' }
 
 export const COUNTRIES = [
   'Afghanistan','Albania','Algeria','Andorra','Angola','Antigua and Barbuda','Argentina',
@@ -419,6 +431,9 @@ export function Modal({
       product_lines:     cleanLines,
       country:           draft.country || null,
       opportunity_type:  draft.opportunity_type || null,
+      website:           draft.website.trim() || null,
+      source:            draft.source || null,
+      priority:          draft.priority || null,
       currency:          draft.currency || 'USD',
       close_date:        draft.close_date || null,
       value:             dealValue,
@@ -436,11 +451,14 @@ export function Modal({
     const payload: Record<string, unknown> = { ...base }
     let sbError: { message: string } | null = null
 
-    for (let attempt = 0; attempt < 8; attempt++) {
+    for (let attempt = 0; attempt < 11; attempt++) {
       const { error } = await supabase.from('opportunities').update(payload).eq('id', opportunity.id)
       sbError = error
       if (!error) break
       if (error.message?.includes('opportunity_type'))  { delete payload.opportunity_type;  continue }
+      if (error.message?.includes('website'))           { delete payload.website;           continue }
+      if (error.message?.includes('source'))            { delete payload.source;            continue }
+      if (error.message?.includes('priority'))          { delete payload.priority;          continue }
       if (error.message?.includes('updated_at'))        { delete payload.updated_at;        continue }
       if (error.message?.includes('product_lines'))     { delete payload.product_lines;     continue }
       if (error.message?.includes('quarterly_incomes')) { delete payload.quarterly_incomes; continue }
@@ -606,6 +624,24 @@ export function Modal({
                   <select className={selectCls} value={draft.opportunity_type} onChange={(e) => setDraft((d) => ({ ...d, opportunity_type: e.target.value }))}>
                     <option value="">— Select type —</option>
                     {OPPORTUNITY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </Field>
+
+                <Field label="Website">
+                  <input type="url" className={inputCls} placeholder="https://company.com"
+                    value={draft.website} onChange={(e) => setDraft((d) => ({ ...d, website: e.target.value }))} />
+                </Field>
+
+                <Field label="Lead Source">
+                  <select className={selectCls} value={draft.source} onChange={(e) => setDraft((d) => ({ ...d, source: e.target.value }))}>
+                    <option value="">— Select source —</option>
+                    {LEAD_SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </Field>
+
+                <Field label="Priority">
+                  <select className={selectCls} value={draft.priority} onChange={(e) => setDraft((d) => ({ ...d, priority: e.target.value }))}>
+                    {PRIORITIES.map((p) => <option key={p} value={p}>{PRIORITY_ICONS[p]} {p}</option>)}
                   </select>
                 </Field>
 
@@ -830,9 +866,11 @@ export function AddOpportunityModal({
   existingAccounts?: string[]
 }) {
   const [form, setForm] = useState({
-    name: '', customer_name: '', country: '', owner: defaultOwner,
+    name: '', customer_name: '', website: '', country: '', owner: defaultOwner,
     stage: 'Discovery', product: '', status: 'On Track', close_date: '', value: '',
     currency: 'USD', probability: null as number | null, opportunity_type: '',
+    source: '', priority: 'Medium',
+    contact_name: '', contact_title: '', contact_email: '', contact_phone: '', contact_linkedin: '',
     product_lines: [] as ProductLine[],
   })
   const [saving, setSaving]   = useState(false)
@@ -861,6 +899,9 @@ export function AddOpportunityModal({
       status:           form.status || null,
       country:          form.country || null,
       opportunity_type: form.opportunity_type || null,
+      website:          form.website.trim() || null,
+      source:           form.source || null,
+      priority:         form.priority || null,
       currency:         form.currency || 'USD',
       close_date:       form.close_date || null,
       value:            dealValue,
@@ -874,22 +915,39 @@ export function AddOpportunityModal({
     let data: any[] | null = null
     let sbError: { message: string } | null = null
 
-    for (let attempt = 0; attempt < 6; attempt++) {
+    for (let attempt = 0; attempt < 9; attempt++) {
       const res = await supabase.from('opportunities').insert([payload]).select()
       data = res.data; sbError = res.error
       if (!res.error) break
       // Strip unsupported columns one at a time and retry.
       // Note: final_win_value is not sent on INSERT so that branch is omitted here.
       if (res.error.message?.includes('opportunity_type')) { delete payload.opportunity_type; continue }
-      if (res.error.message?.includes('product_lines'))    { delete payload.product_lines;    continue }
-      if (res.error.message?.includes('probability'))      { delete payload.probability;      continue }
-      if (res.error.message?.includes('currency'))         { delete payload.currency;         continue }
+      if (res.error.message?.includes('website'))           { delete payload.website;          continue }
+      if (res.error.message?.includes('source'))            { delete payload.source;           continue }
+      if (res.error.message?.includes('priority'))          { delete payload.priority;         continue }
+      if (res.error.message?.includes('product_lines'))     { delete payload.product_lines;    continue }
+      if (res.error.message?.includes('probability'))       { delete payload.probability;      continue }
+      if (res.error.message?.includes('currency'))          { delete payload.currency;         continue }
       break
     }
 
     setSaving(false)
     if (sbError) { setError(sbError.message); return }
     const newOpp = (data?.[0] ?? { id: crypto.randomUUID(), ...payload }) as Opportunity
+
+    // Save the contact into the opportunity's Contacts tab (best-effort).
+    if (form.contact_name.trim() || form.contact_email.trim()) {
+      await supabase.from('opportunity_contacts').insert([{
+        opportunity_id: String(newOpp.id),
+        name:  form.contact_name.trim() || '—',
+        title: form.contact_title.trim() || null,
+        email: form.contact_email.trim() || null,
+        phone: form.contact_phone.trim() || null,
+        organization: form.customer_name.trim() || null,
+        note:  form.contact_linkedin.trim() ? `LinkedIn: ${form.contact_linkedin.trim()}` : null,
+      }])
+    }
+
     onAdded(newOpp)
     onClose()
   }
@@ -969,7 +1027,7 @@ export function AddOpportunityModal({
 
           {/* Details */}
           <div className="grid grid-cols-2 gap-4">
-              <Field label="Account Name">
+              <Field label="Company Name">
                 <input className={inputCls} placeholder="Company or account"
                   value={form.customer_name} onChange={(e) => setForm((f) => ({ ...f, customer_name: e.target.value }))} />
                 {(() => {
@@ -988,6 +1046,54 @@ export function AddOpportunityModal({
                 })()}
               </Field>
 
+              <Field label="Website">
+                <input type="url" className={inputCls} placeholder="https://company.com"
+                  value={form.website} onChange={(e) => setForm((f) => ({ ...f, website: e.target.value }))} />
+              </Field>
+
+              {/* ── Contact Information ─────────────────────────────────── */}
+              <p className="col-span-2 mt-1 border-b border-zinc-100 pb-1 text-xs font-bold uppercase tracking-wider text-zinc-500">Contact Information</p>
+
+              <Field label="Contact Name">
+                <input className={inputCls} placeholder="Full name"
+                  value={form.contact_name} onChange={(e) => setForm((f) => ({ ...f, contact_name: e.target.value }))} />
+              </Field>
+
+              <Field label="Job Title">
+                <input className={inputCls} placeholder="e.g. VP Engineering"
+                  value={form.contact_title} onChange={(e) => setForm((f) => ({ ...f, contact_title: e.target.value }))} />
+              </Field>
+
+              <Field label="Email">
+                <input type="email" className={inputCls} placeholder="name@company.com"
+                  value={form.contact_email} onChange={(e) => setForm((f) => ({ ...f, contact_email: e.target.value }))} />
+              </Field>
+
+              <Field label="Mobile Phone">
+                <input className={inputCls} placeholder="+972…"
+                  value={form.contact_phone} onChange={(e) => setForm((f) => ({ ...f, contact_phone: e.target.value }))} />
+              </Field>
+
+              <div className="col-span-2">
+                <Field label="LinkedIn Profile">
+                  <input type="url" className={inputCls} placeholder="https://linkedin.com/in/…"
+                    value={form.contact_linkedin} onChange={(e) => setForm((f) => ({ ...f, contact_linkedin: e.target.value }))} />
+                </Field>
+              </div>
+
+              {/* ── Deal Details ────────────────────────────────────────── */}
+              <p className="col-span-2 mt-1 border-b border-zinc-100 pb-1 text-xs font-bold uppercase tracking-wider text-zinc-500">Deal Details</p>
+
+              <Field label="Country">
+                <SearchableSelect
+                  value={form.country}
+                  onChange={(v) => setForm((f) => ({ ...f, country: v }))}
+                  options={COUNTRIES}
+                  placeholder="Search country…"
+                  className={inputCls}
+                />
+              </Field>
+
               <Field label="Sales Manager">
                 {managersProp && managersProp.length > 0
                   ? <select className={selectCls} value={form.owner} onChange={(e) => setForm((f) => ({ ...f, owner: e.target.value }))}>
@@ -1001,14 +1107,11 @@ export function AddOpportunityModal({
                 }
               </Field>
 
-              <Field label="Country">
-                <SearchableSelect
-                  value={form.country}
-                  onChange={(v) => setForm((f) => ({ ...f, country: v }))}
-                  options={COUNTRIES}
-                  placeholder="Search country…"
-                  className={inputCls}
-                />
+              <Field label="Lead Source">
+                <select className={selectCls} value={form.source} onChange={(e) => setForm((f) => ({ ...f, source: e.target.value }))}>
+                  <option value="">— Select source —</option>
+                  {LEAD_SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
               </Field>
 
               <Field label="Opportunity Type">
@@ -1017,6 +1120,15 @@ export function AddOpportunityModal({
                   {OPPORTUNITY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                 </select>
               </Field>
+
+              <Field label="Priority">
+                <select className={selectCls} value={form.priority} onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value }))}>
+                  {PRIORITIES.map((p) => <option key={p} value={p}>{PRIORITY_ICONS[p]} {p}</option>)}
+                </select>
+              </Field>
+
+              {/* spacer so the deal-financials area below starts on its own row */}
+              <div />
 
               <Field label="Close Date">
                 <select className={selectCls} value={form.close_date} onChange={(e) => setForm((f) => ({ ...f, close_date: e.target.value }))}>
@@ -1097,6 +1209,9 @@ function toDraft(opp: Opportunity): Draft {
     product_lines: getProductLines(opp),
     country: (opp.country as string) ?? '',
     opportunity_type: ((opp as any).opportunity_type as string) ?? '',
+    website: ((opp as any).website as string) ?? '',
+    source: ((opp as any).source as string) ?? '',
+    priority: ((opp as any).priority as string) ?? 'Medium',
     close_date: (opp as any).close_date ?? '',
     currency: (opp as any).currency ?? 'USD',
     value: opp.value,
