@@ -14,8 +14,10 @@ export type Lead = {
   id: string
   account: string
   contact_name: string | null
+  contact_title: string | null
   contact_email: string | null
   contact_phone: string | null
+  contact_linkedin: string | null
   country: string | null
   owner: string | null
   status: string | null
@@ -51,8 +53,10 @@ type LeadForm = {
   account: string
   website: string
   contact_name: string
+  contact_title: string
   contact_email: string
   contact_phone: string
+  contact_linkedin: string
   country: string
   owner: string
   status: string
@@ -63,7 +67,7 @@ type LeadForm = {
 }
 
 const emptyForm = (owner: string): LeadForm => ({
-  account: '', website: '', contact_name: '', contact_email: '', contact_phone: '',
+  account: '', website: '', contact_name: '', contact_title: '', contact_email: '', contact_phone: '', contact_linkedin: '',
   country: '', owner, status: 'New', source: '', opportunity_type: '', priority: 'Medium', description: '',
 })
 
@@ -171,8 +175,9 @@ export default function LeadsTab({
   function openEdit(lead: Lead) {
     setForm({
       account: lead.account ?? '', website: lead.website ?? '',
-      contact_name: lead.contact_name ?? '',
+      contact_name: lead.contact_name ?? '', contact_title: lead.contact_title ?? '',
       contact_email: lead.contact_email ?? '', contact_phone: lead.contact_phone ?? '',
+      contact_linkedin: lead.contact_linkedin ?? '',
       country: lead.country ?? '', owner: lead.owner ?? '',
       status: lead.status ?? 'New', source: lead.source ?? '',
       opportunity_type: lead.opportunity_type ?? '', priority: lead.priority ?? 'Medium',
@@ -190,8 +195,10 @@ export default function LeadsTab({
       account: form.account.trim(),
       website: form.website.trim(),
       contact_name: form.contact_name.trim(),
+      contact_title: form.contact_title.trim(),
       contact_email: form.contact_email.trim(),
       contact_phone: form.contact_phone.trim(),
+      contact_linkedin: form.contact_linkedin.trim(),
       country: form.country,
       owner: lockedOwner ?? form.owner,
       status: form.status,
@@ -208,6 +215,8 @@ export default function LeadsTab({
         : await supabase.from('leads').update(payload).eq('id', (editing as Lead).id)
       sbError = error
       if (!error) break
+      if (error.message?.includes('contact_title'))    { delete payload.contact_title;    continue }
+      if (error.message?.includes('contact_linkedin')) { delete payload.contact_linkedin; continue }
       if (error.message?.includes('website'))          { delete payload.website;          continue }
       if (error.message?.includes('source'))           { delete payload.source;           continue }
       if (error.message?.includes('opportunity_type')) { delete payload.opportunity_type; continue }
@@ -269,10 +278,14 @@ export default function LeadsTab({
       await supabase.from('opportunity_contacts').insert([{
         opportunity_id: String(newOpp.id),
         name: converting.contact_name || '—',
+        title: converting.contact_title || null,
         email: converting.contact_email || null,
         phone: converting.contact_phone || null,
         organization: converting.account,
-        note: 'Carried over from lead',
+        note: [
+          'Carried over from lead',
+          converting.contact_linkedin ? `LinkedIn: ${converting.contact_linkedin}` : '',
+        ].filter(Boolean).join(' · '),
       }])
     }
 
@@ -482,7 +495,21 @@ export default function LeadsTab({
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <p className="whitespace-nowrap text-gray-700">{lead.contact_name || '—'}</p>
+                      <p className="whitespace-nowrap text-gray-700">
+                        {lead.contact_name || '—'}
+                        {lead.contact_linkedin && (
+                          <a
+                            href={lead.contact_linkedin.startsWith('http') ? lead.contact_linkedin : `https://${lead.contact_linkedin}`}
+                            target="_blank" rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            title="LinkedIn profile"
+                            className="ml-1.5 inline-flex h-4 w-4 items-center justify-center rounded bg-[#0a66c2] align-text-bottom text-[9px] font-bold text-white hover:opacity-80"
+                          >
+                            in
+                          </a>
+                        )}
+                      </p>
+                      {lead.contact_title && <p className="text-xs text-gray-500">{lead.contact_title}</p>}
                       {lead.contact_email && <p className="text-xs text-gray-400">{lead.contact_email}</p>}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-gray-600">{lead.country || '—'}</td>
@@ -539,18 +566,31 @@ export default function LeadsTab({
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Website</label>
                 <input type="url" className={inputCls} placeholder="https://company.com" value={form.website} onChange={(e) => setForm((f) => ({ ...f, website: e.target.value }))} />
               </div>
+              {/* ── Contact Information ─────────────────────────────────── */}
+              <p className="col-span-2 mt-1 border-b border-gray-100 pb-1 text-xs font-bold uppercase tracking-wider text-gray-500">Contact Information</p>
               <div>
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Contact Name</label>
                 <input className={inputCls} placeholder="Full name" value={form.contact_name} onChange={(e) => setForm((f) => ({ ...f, contact_name: e.target.value }))} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Job Title</label>
+                <input className={inputCls} placeholder="e.g. VP Engineering" value={form.contact_title} onChange={(e) => setForm((f) => ({ ...f, contact_title: e.target.value }))} />
               </div>
               <div>
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Email</label>
                 <input type="email" className={inputCls} placeholder="name@company.com" value={form.contact_email} onChange={(e) => setForm((f) => ({ ...f, contact_email: e.target.value }))} />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Phone</label>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Mobile Phone</label>
                 <input className={inputCls} placeholder="+972…" value={form.contact_phone} onChange={(e) => setForm((f) => ({ ...f, contact_phone: e.target.value }))} />
               </div>
+              <div className="col-span-2">
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">LinkedIn Profile</label>
+                <input type="url" className={inputCls} placeholder="https://linkedin.com/in/…" value={form.contact_linkedin} onChange={(e) => setForm((f) => ({ ...f, contact_linkedin: e.target.value }))} />
+              </div>
+
+              {/* ── Lead Details ────────────────────────────────────────── */}
+              <p className="col-span-2 mt-1 border-b border-gray-100 pb-1 text-xs font-bold uppercase tracking-wider text-gray-500">Lead Details</p>
               <div>
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Country</label>
                 <SearchableSelect value={form.country} onChange={(v) => setForm((f) => ({ ...f, country: v }))} options={COUNTRIES} placeholder="Search country…" className={inputCls} />
