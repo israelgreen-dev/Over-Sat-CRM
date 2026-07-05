@@ -42,8 +42,8 @@ export async function GET(req: NextRequest) {
   const users = data.users.map((u) => ({
     id:         u.id,
     email:      u.email,
-    name:       u.user_metadata?.name ?? '',
     // app_metadata is authoritative; user_metadata only as legacy fallback
+    name:       u.app_metadata?.name ?? u.user_metadata?.name ?? '',
     role:       u.app_metadata?.role ?? u.user_metadata?.role ?? '',
     created_at: u.created_at,
   }))
@@ -72,12 +72,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Password must be at least 8 characters' }, { status: 400 })
   }
 
+  // Name + role live in app_metadata (server-only) so users can't edit them;
+  // name is mirrored to user_metadata for display compatibility.
   const { data, error } = await supabaseAdmin.auth.admin.createUser({
     email,
     password,
     email_confirm: true,
     user_metadata: { name },
-    app_metadata: { role },
+    app_metadata: { role, name },
   })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
@@ -148,8 +150,15 @@ export async function PATCH(req: NextRequest) {
   const updates: Record<string, unknown> = {}
   if (password) updates.password = password
   if (name) updates.user_metadata = { ...existingUserMeta, name }
-  // Role lives in app_metadata (server-only) so users can't self-promote.
-  if (role) updates.app_metadata = { ...existingAppMeta, role }
+  // Name + role live in app_metadata (server-only) so users can't self-edit
+  // them — RLS matches deal/lead ownership by app_metadata name.
+  if (role || name) {
+    updates.app_metadata = {
+      ...existingAppMeta,
+      ...(role ? { role } : {}),
+      ...(name ? { name } : {}),
+    }
+  }
 
   const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, updates)
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })

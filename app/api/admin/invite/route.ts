@@ -41,9 +41,10 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 
-  // Role lives in app_metadata (server-only) so users can't self-promote.
+  // Name + role live in app_metadata (server-only) so users can't self-edit
+  // them — RLS matches deal/lead ownership by app_metadata name.
   const { error: roleError } = await supabaseAdmin.auth.admin.updateUserById(data.user.id, {
-    app_metadata: { role },
+    app_metadata: { role, name },
   })
   if (roleError) return NextResponse.json({ error: roleError.message }, { status: 400 })
 

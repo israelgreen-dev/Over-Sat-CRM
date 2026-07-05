@@ -92,7 +92,9 @@ export default function Dashboard() {
       const p: UserProfile = {
         id: user.id,
         email: user.email ?? '',
-        name: user.user_metadata?.name ?? '',
+        // app_metadata is authoritative (admin-assigned, matches RLS
+        // ownership); user_metadata only as legacy/display fallback.
+        name: ((user.app_metadata?.name as string) ?? user.user_metadata?.name ?? ''),
         role: ((user.app_metadata?.role as string) ?? user.user_metadata?.role ?? '') as UserProfile['role'],
       }
       setProfile(p)
