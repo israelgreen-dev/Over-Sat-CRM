@@ -290,7 +290,15 @@ export default function LeadsTab({
       }])
     }
 
-    // 3. Mark the lead converted
+    // 3. Carry the lead's description over as the deal's first note
+    if (converting.description?.trim()) {
+      await supabase.from('notes').insert([{
+        opportunity_id: String(newOpp.id),
+        content: `From lead: ${converting.description.trim()}`,
+      }])
+    }
+
+    // 4. Mark the lead converted
     await supabase.from('leads')
       .update({ status: 'Converted', converted_opportunity_id: String(newOpp.id) })
       .eq('id', converting.id)
