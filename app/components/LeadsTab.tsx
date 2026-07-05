@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import { type Opportunity, SearchableSelect, COUNTRIES } from './OpportunitiesTable'
+import { type Opportunity, SearchableSelect, COUNTRIES, OPPORTUNITY_TYPES } from './OpportunitiesTable'
 
 /**
  * LeadsTab — a lightweight pre-pipeline stage.
@@ -20,6 +20,10 @@ export type Lead = {
   owner: string | null
   status: string | null
   description: string | null
+  source: string | null
+  opportunity_type: string | null
+  priority: string | null
+  website: string | null
   converted_opportunity_id: string | null
   created_at: string
   updated_at: string
@@ -35,20 +39,32 @@ const STATUS_COLORS: Record<string, string> = {
   Converted: 'bg-emerald-100 text-emerald-700',
 }
 
+export const LEAD_SOURCES = [
+  'Website', 'Exhibition', 'Partner', 'Referral', 'LinkedIn',
+  'Cold Outreach', 'Existing Customer', 'Distributor', 'Other',
+] as const
+
+const PRIORITIES = ['High', 'Medium', 'Low'] as const
+const PRIORITY_ICONS: Record<string, string> = { High: '🔴', Medium: '🟡', Low: '🟢' }
+
 type LeadForm = {
   account: string
+  website: string
   contact_name: string
   contact_email: string
   contact_phone: string
   country: string
   owner: string
   status: string
+  source: string
+  opportunity_type: string
+  priority: string
   description: string
 }
 
 const emptyForm = (owner: string): LeadForm => ({
-  account: '', contact_name: '', contact_email: '', contact_phone: '',
-  country: '', owner, status: 'New', description: '',
+  account: '', website: '', contact_name: '', contact_email: '', contact_phone: '',
+  country: '', owner, status: 'New', source: '', opportunity_type: '', priority: 'Medium', description: '',
 })
 
 const updatedFmt = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })
@@ -90,6 +106,8 @@ export default function LeadsTab({
   const [search, setSearch]               = useState('')
   const [filterManager, setFilterManager] = useState('')
   const [filterCountry, setFilterCountry] = useState('')
+  const [filterSource, setFilterSource]   = useState('')
+  const [filterPriority, setFilterPriority] = useState('')
 
   const [editing, setEditing]   = useState<Lead | 'new' | null>(null)
   const [form, setForm]         = useState<LeadForm>(emptyForm(''))
@@ -117,6 +135,8 @@ export default function LeadsTab({
     if (statusFilter && (l.status ?? 'New') !== statusFilter) return false
     if (filterManager && (l.owner ?? '').toLowerCase() !== filterManager.toLowerCase()) return false
     if (filterCountry && (l.country ?? '') !== filterCountry) return false
+    if (filterSource && (l.source ?? '') !== filterSource) return false
+    if (filterPriority && (l.priority ?? 'Medium') !== filterPriority) return false
     if (search) {
       const q = search.trim().toLowerCase()
       const hit =
@@ -135,9 +155,9 @@ export default function LeadsTab({
     () => Array.from(new Set(leads.map((l) => l.country ?? '').filter(Boolean))).sort(),
     [leads],
   )
-  const anyFilterActive = !!(statusFilter || filterManager || filterCountry || search)
+  const anyFilterActive = !!(statusFilter || filterManager || filterCountry || filterSource || filterPriority || search)
   function clearAllFilters() {
-    setStatusFilter(''); setFilterManager(''); setFilterCountry(''); setSearch('')
+    setStatusFilter(''); setFilterManager(''); setFilterCountry(''); setFilterSource(''); setFilterPriority(''); setSearch('')
   }
 
   const activeCount = leads.filter((l) => !['Dropped', 'Converted'].includes(l.status ?? 'New')).length
@@ -150,10 +170,13 @@ export default function LeadsTab({
 
   function openEdit(lead: Lead) {
     setForm({
-      account: lead.account ?? '', contact_name: lead.contact_name ?? '',
+      account: lead.account ?? '', website: lead.website ?? '',
+      contact_name: lead.contact_name ?? '',
       contact_email: lead.contact_email ?? '', contact_phone: lead.contact_phone ?? '',
       country: lead.country ?? '', owner: lead.owner ?? '',
-      status: lead.status ?? 'New', description: lead.description ?? '',
+      status: lead.status ?? 'New', source: lead.source ?? '',
+      opportunity_type: lead.opportunity_type ?? '', priority: lead.priority ?? 'Medium',
+      description: lead.description ?? '',
     })
     setFormError(null)
     setEditing(lead)
@@ -163,21 +186,36 @@ export default function LeadsTab({
     if (!form.account.trim()) { setFormError('Account is required.'); return }
     setBusy(true)
     setFormError(null)
-    const payload = {
+    const payload: Record<string, unknown> = {
       account: form.account.trim(),
+      website: form.website.trim(),
       contact_name: form.contact_name.trim(),
       contact_email: form.contact_email.trim(),
       contact_phone: form.contact_phone.trim(),
       country: form.country,
       owner: lockedOwner ?? form.owner,
       status: form.status,
+      source: form.source,
+      opportunity_type: form.opportunity_type,
+      priority: form.priority,
       description: form.description.trim(),
     }
-    const { error } = editing === 'new'
-      ? await supabase.from('leads').insert([payload])
-      : await supabase.from('leads').update(payload).eq('id', (editing as Lead).id)
+    // Progressive fallback: strip columns that predate migration 011.
+    let sbError: { message: string } | null = null
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const { error } = editing === 'new'
+        ? await supabase.from('leads').insert([payload])
+        : await supabase.from('leads').update(payload).eq('id', (editing as Lead).id)
+      sbError = error
+      if (!error) break
+      if (error.message?.includes('website'))          { delete payload.website;          continue }
+      if (error.message?.includes('source'))           { delete payload.source;           continue }
+      if (error.message?.includes('opportunity_type')) { delete payload.opportunity_type; continue }
+      if (error.message?.includes('priority'))         { delete payload.priority;         continue }
+      break
+    }
     setBusy(false)
-    if (error) { setFormError(error.message); return }
+    if (sbError) { setFormError(sbError.message); return }
     setEditing(null)
     onReload()
   }
@@ -199,7 +237,7 @@ export default function LeadsTab({
     if (!converting || !convertName.trim()) return
     setBusy(true)
     // 1. Create the opportunity (Discovery, no value yet — filled in later)
-    const oppPayload = {
+    const oppPayload: Record<string, unknown> = {
       name: convertName.trim(),
       customer_name: converting.account,
       owner: converting.owner || null,
@@ -212,8 +250,17 @@ export default function LeadsTab({
       value: null,
       loss_reason: null,
       loss_description: null,
+      opportunity_type: converting.opportunity_type || null,
     }
-    const { data, error } = await supabase.from('opportunities').insert([oppPayload]).select()
+    let data: any[] | null = null
+    let error: { message: string } | null = null
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const res = await supabase.from('opportunities').insert([oppPayload]).select()
+      data = res.data; error = res.error
+      if (!res.error) break
+      if (res.error.message?.includes('opportunity_type')) { delete oppPayload.opportunity_type; continue }
+      break
+    }
     if (error) { setBusy(false); alert(`Convert failed: ${error.message}`); return }
     const newOpp = (data?.[0] ?? oppPayload) as Opportunity
 
@@ -351,6 +398,28 @@ export default function LeadsTab({
             {countryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Source</span>
+          <select
+            value={filterSource}
+            onChange={(e) => setFilterSource(e.target.value)}
+            className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm font-medium text-gray-900 transition-colors focus:border-blue-400 focus:bg-white focus:outline-none"
+          >
+            <option value="">All Sources</option>
+            {LEAD_SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Priority</span>
+          <select
+            value={filterPriority}
+            onChange={(e) => setFilterPriority(e.target.value)}
+            className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm font-medium text-gray-900 transition-colors focus:border-blue-400 focus:bg-white focus:outline-none"
+          >
+            <option value="">All Priorities</option>
+            {PRIORITIES.map((p) => <option key={p} value={p}>{PRIORITY_ICONS[p]} {p}</option>)}
+          </select>
+        </div>
         {anyFilterActive && (
           <span className="flex items-center gap-3 text-xs text-gray-400">
             <span className="rounded-full border border-gray-200 bg-white px-2.5 py-0.5 font-semibold text-gray-500 shadow-sm">
@@ -382,7 +451,7 @@ export default function LeadsTab({
           <table className="min-w-full divide-y divide-gray-200 text-sm">
             <thead className="bg-gray-50">
               <tr>
-                {['Account', 'Contact', 'Country', 'Manager', 'Status', 'Description', 'Updated', ''].map((h, i) => (
+                {['Pri', 'Account', 'Contact', 'Country', 'Manager', 'Status', 'Source', 'Description', 'Updated', ''].map((h, i) => (
                   <th key={i} className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">{h}</th>
                 ))}
               </tr>
@@ -396,7 +465,22 @@ export default function LeadsTab({
                     onClick={() => !readOnly && !converted && openEdit(lead)}
                     className={`transition-colors ${!readOnly && !converted ? 'cursor-pointer hover:bg-gray-50' : ''} ${converted ? 'opacity-60' : ''}`}
                   >
-                    <td className="whitespace-nowrap px-4 py-3 font-medium text-gray-900">{lead.account}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-base" title={`${lead.priority ?? 'Medium'} priority`}>
+                      {PRIORITY_ICONS[lead.priority ?? 'Medium'] ?? '🟡'}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      <p className="font-medium text-gray-900">{lead.account}</p>
+                      {lead.website && (
+                        <a
+                          href={lead.website.startsWith('http') ? lead.website : `https://${lead.website}`}
+                          target="_blank" rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-xs text-blue-500 hover:underline"
+                        >
+                          {lead.website.replace(/^https?:\/\//, '')}
+                        </a>
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       <p className="whitespace-nowrap text-gray-700">{lead.contact_name || '—'}</p>
                       {lead.contact_email && <p className="text-xs text-gray-400">{lead.contact_email}</p>}
@@ -408,7 +492,8 @@ export default function LeadsTab({
                         {lead.status ?? 'New'}
                       </span>
                     </td>
-                    <td className="max-w-[240px] truncate px-4 py-3 text-xs text-gray-500" title={lead.description ?? ''}>
+                    <td className="whitespace-nowrap px-4 py-3 text-xs text-gray-500">{lead.source || '—'}</td>
+                    <td className="max-w-[200px] truncate px-4 py-3 text-xs text-gray-500" title={lead.description ?? ''}>
                       {lead.description || '—'}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-xs text-gray-400">{updatedFmt.format(new Date(lead.updated_at))}</td>
@@ -446,9 +531,13 @@ export default function LeadsTab({
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2">
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Account *</label>
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Company Name *</label>
                 <input autoFocus className={inputCls} placeholder="Company or account" value={form.account} onChange={(e) => setForm((f) => ({ ...f, account: e.target.value }))} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Website</label>
+                <input type="url" className={inputCls} placeholder="https://company.com" value={form.website} onChange={(e) => setForm((f) => ({ ...f, website: e.target.value }))} />
               </div>
               <div>
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Contact Name</label>
@@ -481,6 +570,26 @@ export default function LeadsTab({
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Status</label>
                 <select className={inputCls} value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}>
                   {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Lead Source</label>
+                <select className={inputCls} value={form.source} onChange={(e) => setForm((f) => ({ ...f, source: e.target.value }))}>
+                  <option value="">— Select source —</option>
+                  {LEAD_SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Opportunity Type</label>
+                <select className={inputCls} value={form.opportunity_type} onChange={(e) => setForm((f) => ({ ...f, opportunity_type: e.target.value }))}>
+                  <option value="">— Select type —</option>
+                  {OPPORTUNITY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Priority</label>
+                <select className={inputCls} value={form.priority} onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value }))}>
+                  {PRIORITIES.map((p) => <option key={p} value={p}>{PRIORITY_ICONS[p]} {p}</option>)}
                 </select>
               </div>
               <div className="col-span-2">

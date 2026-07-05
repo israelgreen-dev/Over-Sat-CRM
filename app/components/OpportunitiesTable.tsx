@@ -25,6 +25,7 @@ type Draft = {
   product: string
   product_lines: ProductLine[]
   country: string
+  opportunity_type: string
   currency: string
   value: number | null
   close_date: string
@@ -121,6 +122,13 @@ const CURRENCIES: { code: string; label: string }[] = [
   { code: 'EUR', label: 'EUR — Euro (€)'           },
   { code: 'ILS', label: 'ILS — Israeli Shekel (₪)' },
 ]
+
+// What kind of buyer the deal is with — set on the lead and carried over on
+// conversion; editable on the opportunity itself.
+export const OPPORTUNITY_TYPES = [
+  'Direct Customer', 'Partner', 'Distributor', 'Integrator',
+  'Government', 'Military', 'Law Enforcement',
+] as const
 
 export const COUNTRIES = [
   'Afghanistan','Albania','Algeria','Andorra','Angola','Antigua and Barbuda','Argentina',
@@ -410,6 +418,7 @@ export function Modal({
       product:           (cleanLines.length > 0 ? productSummary(cleanLines) : draft.product) || null,
       product_lines:     cleanLines,
       country:           draft.country || null,
+      opportunity_type:  draft.opportunity_type || null,
       currency:          draft.currency || 'USD',
       close_date:        draft.close_date || null,
       value:             dealValue,
@@ -427,10 +436,11 @@ export function Modal({
     const payload: Record<string, unknown> = { ...base }
     let sbError: { message: string } | null = null
 
-    for (let attempt = 0; attempt < 7; attempt++) {
+    for (let attempt = 0; attempt < 8; attempt++) {
       const { error } = await supabase.from('opportunities').update(payload).eq('id', opportunity.id)
       sbError = error
       if (!error) break
+      if (error.message?.includes('opportunity_type'))  { delete payload.opportunity_type;  continue }
       if (error.message?.includes('updated_at'))        { delete payload.updated_at;        continue }
       if (error.message?.includes('product_lines'))     { delete payload.product_lines;     continue }
       if (error.message?.includes('quarterly_incomes')) { delete payload.quarterly_incomes; continue }
@@ -590,6 +600,13 @@ export function Modal({
                     placeholder="Search country…"
                     className={inputCls}
                   />
+                </Field>
+
+                <Field label="Opportunity Type">
+                  <select className={selectCls} value={draft.opportunity_type} onChange={(e) => setDraft((d) => ({ ...d, opportunity_type: e.target.value }))}>
+                    <option value="">— Select type —</option>
+                    {OPPORTUNITY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                  </select>
                 </Field>
 
                 <Field label="Close Date">
@@ -815,7 +832,7 @@ export function AddOpportunityModal({
   const [form, setForm] = useState({
     name: '', customer_name: '', country: '', owner: defaultOwner,
     stage: 'Discovery', product: '', status: 'On Track', close_date: '', value: '',
-    currency: 'USD', probability: null as number | null,
+    currency: 'USD', probability: null as number | null, opportunity_type: '',
     product_lines: [] as ProductLine[],
   })
   const [saving, setSaving]   = useState(false)
@@ -843,6 +860,7 @@ export function AddOpportunityModal({
       product_lines:    cleanLines,
       status:           form.status || null,
       country:          form.country || null,
+      opportunity_type: form.opportunity_type || null,
       currency:         form.currency || 'USD',
       close_date:       form.close_date || null,
       value:            dealValue,
@@ -856,15 +874,16 @@ export function AddOpportunityModal({
     let data: any[] | null = null
     let sbError: { message: string } | null = null
 
-    for (let attempt = 0; attempt < 5; attempt++) {
+    for (let attempt = 0; attempt < 6; attempt++) {
       const res = await supabase.from('opportunities').insert([payload]).select()
       data = res.data; sbError = res.error
       if (!res.error) break
       // Strip unsupported columns one at a time and retry.
       // Note: final_win_value is not sent on INSERT so that branch is omitted here.
-      if (res.error.message?.includes('product_lines')) { delete payload.product_lines; continue }
-      if (res.error.message?.includes('probability'))   { delete payload.probability;   continue }
-      if (res.error.message?.includes('currency'))      { delete payload.currency;      continue }
+      if (res.error.message?.includes('opportunity_type')) { delete payload.opportunity_type; continue }
+      if (res.error.message?.includes('product_lines'))    { delete payload.product_lines;    continue }
+      if (res.error.message?.includes('probability'))      { delete payload.probability;      continue }
+      if (res.error.message?.includes('currency'))         { delete payload.currency;         continue }
       break
     }
 
@@ -992,6 +1011,13 @@ export function AddOpportunityModal({
                 />
               </Field>
 
+              <Field label="Opportunity Type">
+                <select className={selectCls} value={form.opportunity_type} onChange={(e) => setForm((f) => ({ ...f, opportunity_type: e.target.value }))}>
+                  <option value="">— Select type —</option>
+                  {OPPORTUNITY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </Field>
+
               <Field label="Close Date">
                 <select className={selectCls} value={form.close_date} onChange={(e) => setForm((f) => ({ ...f, close_date: e.target.value }))}>
                   <option value="">— Select quarter —</option>
@@ -1070,6 +1096,7 @@ function toDraft(opp: Opportunity): Draft {
     product: (opp.product as string) ?? '',
     product_lines: getProductLines(opp),
     country: (opp.country as string) ?? '',
+    opportunity_type: ((opp as any).opportunity_type as string) ?? '',
     close_date: (opp as any).close_date ?? '',
     currency: (opp as any).currency ?? 'USD',
     value: opp.value,
