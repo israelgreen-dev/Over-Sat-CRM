@@ -352,8 +352,13 @@ export default function AnalyticsTab({
       </Section>
 
       {/* ── Lead funnel ───────────────────────────────────────────────────── */}
-      {leads.length > 0 && (
-        <Section title="Lead Funnel" subtitle="Top of the pipeline — leads by status and conversion into opportunities">
+      <Section title="Lead Funnel" subtitle="Top of the pipeline — leads by status and conversion into opportunities">
+        {leads.length === 0 ? (
+          <p className="py-8 text-center text-sm text-gray-400">
+            No leads{selectedYear !== 'All Years' ? ` created in ${selectedYear}` : ' yet'} — capture prospects with the green <span className="font-semibold text-emerald-600">+ New Lead</span> button.
+          </p>
+        ) : (
+        <>
           <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <KPI label="Total Leads"     value={String(leads.length)}    sub={selectedYear === 'All Years' ? 'all years' : `created in ${selectedYear}`} />
             <KPI label="Active Leads"    value={String(activeLeads)}     sub="new · contacted · qualified" color="text-blue-600" bg="bg-blue-50" />
@@ -401,8 +406,9 @@ export default function AnalyticsTab({
               </div>
             </div>
           )}
-        </Section>
-      )}
+        </>
+        )}
+      </Section>
 
       {/* ── Achievement per manager ───────────────────────────────────────── */}
       <Section title="Annual Target Achievement" subtitle="Win progress vs quota per manager">

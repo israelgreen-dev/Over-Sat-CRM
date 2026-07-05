@@ -7,6 +7,7 @@ import {
   Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
 import { type Opportunity } from './OpportunitiesTable'
+import { type Lead } from './LeadsTab'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 export const MANAGER_TARGETS: Record<string, number> = {}
@@ -46,6 +47,7 @@ function DashboardAnalytics({
   managerTargets = MANAGER_TARGETS,
   managers = MANAGERS,
   managerColors: managerColorsProp = MANAGER_COLORS,
+  leads = [],
 }: {
   opportunities: Opportunity[]
   viewAs?: string
@@ -53,6 +55,7 @@ function DashboardAnalytics({
   managerTargets?: Record<string, number>
   managers?: string[]
   managerColors?: Record<string, string>
+  leads?: Lead[]
 }) {
   const isHoS        = viewAs === 'head_of_sales'
   const managerColors = managerColorsProp
@@ -161,6 +164,45 @@ function DashboardAnalytics({
             {fmtShort(closedValue)} of {fmtShort(scopeTarget)}
           </p>
         </div>
+      </div>
+
+      {/* ── Leads at a glance ─────────────────────────────────────────────── */}
+      <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm transition-shadow duration-200 hover:shadow-md border-t-4 border-emerald-500">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="text-[15px] font-semibold text-gray-900">Leads at a Glance</h3>
+            <p className="mt-0.5 text-xs text-gray-400">Top of the funnel — manage them in the Leads tab</p>
+          </div>
+          {(() => {
+            const conv = leads.filter((l) => (l.status ?? '') === 'Converted').length
+            const decided = conv + leads.filter((l) => (l.status ?? '') === 'Dropped').length
+            return decided > 0 ? (
+              <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-600">
+                {Math.round((conv / decided) * 100)}% conversion
+              </span>
+            ) : null
+          })()}
+        </div>
+        {leads.length === 0 ? (
+          <p className="py-3 text-sm text-gray-400">No leads yet — click <span className="font-semibold text-emerald-600">+ New Lead</span> in the top bar to capture your first prospect.</p>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+            {([
+              ['New',       'text-blue-600',    'bg-blue-50'],
+              ['Contacted', 'text-amber-600',   'bg-amber-50'],
+              ['Qualified', 'text-green-600',   'bg-green-50'],
+              ['Converted', 'text-emerald-600', 'bg-emerald-50'],
+              ['Dropped',   'text-gray-400',    'bg-gray-50'],
+            ] as const).map(([status, txt, bg]) => (
+              <div key={status} className={`rounded-lg ${bg} px-4 py-3 text-center`}>
+                <p className={`tabular-nums text-2xl font-bold ${txt}`}>
+                  {leads.filter((l) => (l.status ?? 'New') === status).length}
+                </p>
+                <p className="mt-0.5 text-xs font-medium text-gray-500">{status}</p>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ── Charts Row ────────────────────────────────────────────────────── */}

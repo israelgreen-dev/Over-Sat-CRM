@@ -781,6 +781,7 @@ export default function Dashboard() {
             managerTargets={managerTargets}
             managers={managers}
             managerColors={managerColors}
+            leads={leadsError ? [] : visibleLeads}
           />
         )}
 
