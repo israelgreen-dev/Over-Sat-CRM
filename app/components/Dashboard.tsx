@@ -6,6 +6,7 @@ import { toUSD } from '@/lib/currency'
 import { type Opportunity, DEFAULT_PROBABILITY } from './OpportunitiesTable'
 import DashboardAnalytics, { MANAGER_TARGETS } from './DashboardAnalytics'
 import ManagersTab from './ManagersTab'
+import LeadsTab from './LeadsTab'
 import PipelineTab from './PipelineTab'
 import SettingsTab from './SettingsTab'
 import AnalyticsTab from './AnalyticsTab'
@@ -30,7 +31,7 @@ const CURRENT_YEAR     = String(new Date().getFullYear())
 // per-year targets. Used by the header year selector and Analytics.
 const ALL_YEARS        = 'All Years'
 
-type Tab = 'Dashboard' | 'Sales Managers' | 'Opportunities' | 'Analytics' | 'Projection' | 'Targets' | 'Settings'
+type Tab = 'Dashboard' | 'Sales Managers' | 'Leads' | 'Opportunities' | 'Analytics' | 'Projection' | 'Targets' | 'Settings'
 
 type UserProfile = {
   id: string
@@ -366,14 +367,14 @@ export default function Dashboard() {
 
   const tabs = useMemo<Tab[]>(
     () => isAdmin && isHoS
-      ? ['Dashboard', 'Sales Managers', 'Opportunities', 'Analytics', 'Projection', 'Targets', 'Settings']
+      ? ['Dashboard', 'Sales Managers', 'Leads', 'Opportunities', 'Analytics', 'Projection', 'Targets', 'Settings']
       : isAdmin && !isHoS
-      ? ['Dashboard', 'Opportunities', 'Analytics', 'Projection', 'Targets']
+      ? ['Dashboard', 'Leads', 'Opportunities', 'Analytics', 'Projection', 'Targets']
       : isHoS
-      ? ['Dashboard', 'Sales Managers', 'Opportunities', 'Analytics', 'Projection', 'Targets', 'Settings']
+      ? ['Dashboard', 'Sales Managers', 'Leads', 'Opportunities', 'Analytics', 'Projection', 'Targets', 'Settings']
       : isPartner
-      ? ['Dashboard', 'Sales Managers', 'Opportunities', 'Analytics', 'Projection']
-      : ['Dashboard', 'Opportunities', 'Analytics', 'Projection'],
+      ? ['Dashboard', 'Sales Managers', 'Leads', 'Opportunities', 'Analytics', 'Projection']
+      : ['Dashboard', 'Leads', 'Opportunities', 'Analytics', 'Projection'],
     [isAdmin, isHoS, isPartner],
   )
   const safeTab: Tab = tabs.includes(activeTab) ? activeTab : 'Dashboard'
@@ -716,6 +717,16 @@ export default function Dashboard() {
             managers={managers}
             managerColors={managerColors}
             uploaderName={profile?.name ?? ''}
+          />
+        )}
+
+        {safeTab === 'Leads' && (
+          <LeadsTab
+            managers={managers}
+            currentUserName={profile?.name ?? ''}
+            lockedOwner={profile?.role === 'manager' ? profile.name : undefined}
+            readOnly={profile?.role === 'partner'}
+            onOppAdded={handleOppAdded}
           />
         )}
 

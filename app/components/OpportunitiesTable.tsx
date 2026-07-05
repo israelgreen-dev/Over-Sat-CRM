@@ -122,7 +122,7 @@ const CURRENCIES: { code: string; label: string }[] = [
   { code: 'ILS', label: 'ILS — Israeli Shekel (₪)' },
 ]
 
-const COUNTRIES = [
+export const COUNTRIES = [
   'Afghanistan','Albania','Algeria','Andorra','Angola','Antigua and Barbuda','Argentina',
   'Armenia','Australia','Austria','Azerbaijan','Bahamas','Bahrain','Bangladesh','Barbados',
   'Belarus','Belgium','Belize','Benin','Bhutan','Bolivia','Bosnia and Herzegovina',
@@ -1736,7 +1736,7 @@ function QuarterlyAllocationSummary({
 // ── Searchable combo-box ──────────────────────────────────────────────────────
 // Generic reusable component for any option list.
 // Uses position:fixed for the dropdown so it escapes the modal's overflow-y-auto.
-function SearchableSelect({
+export function SearchableSelect({
   value,
   onChange,
   options,
