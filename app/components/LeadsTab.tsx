@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { type Opportunity, SearchableSelect, COUNTRIES } from './OpportunitiesTable'
 
@@ -63,6 +63,8 @@ export default function LeadsTab({
   lockedOwner,
   readOnly = false,
   onOppAdded,
+  addFormOpen = false,
+  onAddFormOpenChange,
 }: {
   /** Lead data owned by the Dashboard so the banner/analytics stay in sync. */
   leads: Lead[]
@@ -78,6 +80,9 @@ export default function LeadsTab({
   readOnly?: boolean
   /** Called with the new opportunity after a successful conversion. */
   onOppAdded: (opp: Opportunity) => void
+  /** External signal (header button) to open the new-lead form. */
+  addFormOpen?: boolean
+  onAddFormOpenChange?: (v: boolean) => void
 }) {
   const [statusFilter, setStatusFilter] = useState('')
   const [search, setSearch]             = useState('')
@@ -92,6 +97,17 @@ export default function LeadsTab({
   const [convertName, setConvertName] = useState('')
 
   const defaultOwner = lockedOwner ?? (managers.includes(currentUserName) ? currentUserName : '')
+
+  // Header "+ New Lead" button: consume the external open signal.
+  useEffect(() => {
+    if (addFormOpen && !readOnly) {
+      setForm(emptyForm(defaultOwner))
+      setFormError(null)
+      setEditing('new')
+      onAddFormOpenChange?.(false)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addFormOpen])
 
   const visible = useMemo(() => leads.filter((l) => {
     if (statusFilter && (l.status ?? 'New') !== statusFilter) return false

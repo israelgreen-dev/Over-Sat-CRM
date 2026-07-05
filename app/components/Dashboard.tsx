@@ -468,6 +468,12 @@ export default function Dashboard() {
     setAddFormOpen(true)
   }, [safeTab])
 
+  const [addLeadOpen, setAddLeadOpen] = useState(false)
+  const handleNewLead = useCallback(() => {
+    if (safeTab !== 'Leads') setActiveTab('Leads')
+    setAddLeadOpen(true)
+  }, [safeTab])
+
   // Bug fix: previously called setManagerTargets(fn) where setManagerTargets
   // only accepts Record<string,number>, so the function reference was stored as
   // the value. Now we call setTargetsByYear directly with a functional updater.
@@ -625,6 +631,18 @@ export default function Dashboard() {
             {/* Divider */}
             <div className="mx-1 h-5 w-px bg-gray-200" />
 
+            {/* New Lead — green CTA */}
+            <button
+              onClick={handleNewLead}
+              title="New Lead"
+              className="flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-400"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              New Lead
+            </button>
+
             {/* New Opportunity — orange CTA */}
             <button
               onClick={handleNewOpportunity}
@@ -634,7 +652,7 @@ export default function Dashboard() {
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
               </svg>
-              New
+              New Opportunity
             </button>
 
             {/* Print — icon only */}
@@ -772,6 +790,8 @@ export default function Dashboard() {
             lockedOwner={profile?.role === 'manager' ? profile.name : undefined}
             readOnly={profile?.role === 'partner'}
             onOppAdded={handleOppAdded}
+            addFormOpen={addLeadOpen}
+            onAddFormOpenChange={setAddLeadOpen}
           />
         )}
 
