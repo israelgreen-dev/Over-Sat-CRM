@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { type Opportunity, SearchableSelect, COUNTRIES } from './OpportunitiesTable'
 
@@ -54,12 +54,21 @@ const emptyForm = (owner: string): LeadForm => ({
 const updatedFmt = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })
 
 export default function LeadsTab({
+  leads,
+  loading,
+  error,
+  onReload,
   managers,
   currentUserName,
   lockedOwner,
   readOnly = false,
   onOppAdded,
 }: {
+  /** Lead data owned by the Dashboard so the banner/analytics stay in sync. */
+  leads: Lead[]
+  loading: boolean
+  error: string | null
+  onReload: () => void
   managers: string[]
   /** Display name of the signed-in user (used as the default owner). */
   currentUserName: string
@@ -70,10 +79,6 @@ export default function LeadsTab({
   /** Called with the new opportunity after a successful conversion. */
   onOppAdded: (opp: Opportunity) => void
 }) {
-  const [leads, setLeads]     = useState<Lead[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError]     = useState<string | null>(null)
-
   const [statusFilter, setStatusFilter] = useState('')
   const [search, setSearch]             = useState('')
 
@@ -87,20 +92,6 @@ export default function LeadsTab({
   const [convertName, setConvertName] = useState('')
 
   const defaultOwner = lockedOwner ?? (managers.includes(currentUserName) ? currentUserName : '')
-
-  async function load() {
-    setLoading(true)
-    const { data, error } = await supabase
-      .from('leads')
-      .select('*')
-      .order('updated_at', { ascending: false })
-    setLoading(false)
-    if (error) { setError(error.message); return }
-    setError(null)
-    setLeads((data ?? []) as Lead[])
-  }
-
-  useEffect(() => { load() }, [])
 
   const visible = useMemo(() => leads.filter((l) => {
     if (statusFilter && (l.status ?? 'New') !== statusFilter) return false
@@ -156,7 +147,7 @@ export default function LeadsTab({
     setBusy(false)
     if (error) { setFormError(error.message); return }
     setEditing(null)
-    load()
+    onReload()
   }
 
   async function deleteLead(lead: Lead) {
@@ -164,7 +155,7 @@ export default function LeadsTab({
     const { error } = await supabase.from('leads').delete().eq('id', lead.id)
     if (error) { alert(`Delete failed: ${error.message}`); return }
     setEditing(null)
-    setLeads((prev) => prev.filter((l) => l.id !== lead.id))
+    onReload()
   }
 
   function startConvert(lead: Lead) {
@@ -215,7 +206,7 @@ export default function LeadsTab({
     setConverting(null)
     setEditing(null)
     onOppAdded(newOpp)
-    load()
+    onReload()
   }
 
   const inputCls = 'w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-blue-400 focus:bg-white focus:outline-none transition-colors'

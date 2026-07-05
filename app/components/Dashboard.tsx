@@ -6,7 +6,7 @@ import { toUSD } from '@/lib/currency'
 import { type Opportunity, DEFAULT_PROBABILITY } from './OpportunitiesTable'
 import DashboardAnalytics, { MANAGER_TARGETS } from './DashboardAnalytics'
 import ManagersTab from './ManagersTab'
-import LeadsTab from './LeadsTab'
+import LeadsTab, { type Lead } from './LeadsTab'
 import PipelineTab from './PipelineTab'
 import SettingsTab from './SettingsTab'
 import AnalyticsTab from './AnalyticsTab'
@@ -142,6 +142,25 @@ export default function Dashboard() {
       })
     return () => { cancelled = true }
   }, [profile?.role, profile?.id])
+
+  // ── Leads (owned here so the banner and Analytics stay in sync) ──────────
+  const [leads, setLeads]             = useState<Lead[]>([])
+  const [leadsLoading, setLeadsLoading] = useState(true)
+  const [leadsError, setLeadsError]   = useState<string | null>(null)
+
+  const reloadLeads = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('leads')
+      .select('*')
+      .order('updated_at', { ascending: false })
+    if (error) { setLeadsError(error.message); setLeads([]) }
+    else       { setLeadsError(null); setLeads((data ?? []) as Lead[]) }
+    setLeadsLoading(false)
+  }, [])
+
+  useEffect(() => {
+    if (profile?.role) reloadLeads()
+  }, [profile?.role, profile?.id, reloadLeads])
 
   const handleOppUpdated = useCallback((updated: Opportunity) => {
     setLiveOpps((prev) => prev.map((o) => (o.id === updated.id ? updated : o)))
@@ -404,6 +423,27 @@ export default function Dashboard() {
           (o) => (o.owner as string)?.toLowerCase() === viewAs.toLowerCase(),
         ),
     [isFullAccess, yearFilteredOpps, viewAs],
+  )
+
+  // Leads visible under the current persona (managers see their own only),
+  // year-filtered by creation date for the Analytics funnel.
+  const visibleLeads = useMemo(
+    () => isFullAccess
+      ? leads
+      : leads.filter((l) => (l.owner ?? '').toLowerCase() === viewAs.toLowerCase()),
+    [isFullAccess, leads, viewAs],
+  )
+
+  const analyticsLeads = useMemo(
+    () => selectedYear === ALL_YEARS
+      ? visibleLeads
+      : visibleLeads.filter((l) => (l.created_at ?? '').startsWith(selectedYear)),
+    [visibleLeads, selectedYear],
+  )
+
+  const activeLeadCount = useMemo(
+    () => visibleLeads.filter((l) => !['Dropped', 'Converted'].includes(l.status ?? 'New')).length,
+    [visibleLeads],
   )
 
   // ── Banner metrics ────────────────────────────────────────────────────────
@@ -687,6 +727,7 @@ export default function Dashboard() {
                   { label: 'Win',             value: fmtCurrency(closedOrders),  accent: 'border-emerald-400'},
                   { label: 'Open Pipeline',   value: fmtCurrency(openPipeline),  accent: 'border-orange-400' },
                   { label: 'Opportunities',   value: String(visibleOpps.length), accent: 'border-slate-500'  },
+                  ...(leadsError ? [] : [{ label: 'Active Leads', value: String(activeLeadCount), accent: 'border-cyan-400' }]),
                 ].map(({ label, value, accent }) => (
                   <div key={label} className={`min-w-[110px] rounded-xl border-t-2 bg-white/10 px-4 py-3 text-center backdrop-blur-sm ${accent}`}>
                     <p className="mb-1 text-xs text-slate-300">{label}</p>
@@ -722,6 +763,10 @@ export default function Dashboard() {
 
         {safeTab === 'Leads' && (
           <LeadsTab
+            leads={visibleLeads}
+            loading={leadsLoading}
+            error={leadsError}
+            onReload={reloadLeads}
             managers={managers}
             currentUserName={profile?.name ?? ''}
             lockedOwner={profile?.role === 'manager' ? profile.name : undefined}
@@ -841,6 +886,7 @@ export default function Dashboard() {
             managers={isAdmin && !isHoS ? [viewAs] : allManagers}
             managerTargets={isAdmin && !isHoS ? { [viewAs]: managerTargets[viewAs] ?? 0 } : managerTargets}
             quarterlyTargets={quarterlyTargets}
+            leads={leadsError ? [] : analyticsLeads}
             managerColors={managerColors}
             selectedYear={selectedYear}
             availableYears={availableYears}

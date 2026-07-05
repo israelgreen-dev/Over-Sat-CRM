@@ -7,6 +7,7 @@ import {
   LineChart, Line,
 } from 'recharts'
 import { type Opportunity, effectiveProbability, getProductLines, lineTotal } from './OpportunitiesTable'
+import { type Lead } from './LeadsTab'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmtShort(n: number) {
@@ -75,6 +76,7 @@ export default function AnalyticsTab({
   managers,
   managerTargets,
   quarterlyTargets = {},
+  leads = [],
   managerColors,
   selectedYear,
   availableYears = [],
@@ -85,6 +87,7 @@ export default function AnalyticsTab({
   managers: string[]
   managerTargets: Record<string, number>
   quarterlyTargets?: Record<string, { q1: number; q2: number; q3: number; q4: number }>
+  leads?: Lead[]
   managerColors: Record<string, string>
   selectedYear: string
   availableYears?: string[]
@@ -225,6 +228,37 @@ export default function AnalyticsTab({
   const planVsActualTrend = planVsActualByQuarter.filter((d) => d.quarter !== 'No Date')
   const hasPlanVsActual = planVsActualByManager.some((m) => m.Planned > 0 || m.Actual > 0)
 
+  // ── Lead funnel ────────────────────────────────────────────────────────────
+  const LEAD_STAGES = ['New', 'Contacted', 'Qualified', 'Converted', 'Dropped'] as const
+  const LEAD_STAGE_COLORS: Record<string, string> = {
+    New: '#3b82f6', Contacted: '#f59e0b', Qualified: '#10b981', Converted: '#059669', Dropped: '#94a3b8',
+  }
+  const leadStageCounts = LEAD_STAGES.map((s) => ({
+    status: s,
+    count: leads.filter((l) => (l.status ?? 'New') === s).length,
+    fill: LEAD_STAGE_COLORS[s],
+  }))
+  const convertedLeads  = leadStageCounts.find((s) => s.status === 'Converted')?.count ?? 0
+  const decidedLeads    = convertedLeads + (leadStageCounts.find((s) => s.status === 'Dropped')?.count ?? 0)
+  const leadConversion  = decidedLeads > 0 ? Math.round((convertedLeads / decidedLeads) * 100) : 0
+  const activeLeads     = leads.length - decidedLeads
+  const maxLeadCount    = Math.max(...leadStageCounts.map((s) => s.count), 1)
+
+  const leadMgrRows = managers.map((name) => {
+    const own = leads.filter((l) => (l.owner ?? '').toLowerCase() === name.toLowerCase())
+    const conv = own.filter((l) => (l.status ?? '') === 'Converted').length
+    const dropped = own.filter((l) => (l.status ?? '') === 'Dropped').length
+    const decided = conv + dropped
+    return {
+      name,
+      total: own.length,
+      active: own.length - decided,
+      qualified: own.filter((l) => (l.status ?? '') === 'Qualified').length,
+      converted: conv,
+      rate: decided > 0 ? Math.round((conv / decided) * 100) : 0,
+    }
+  }).filter((r) => r.total > 0).sort((a, b) => b.total - a.total)
+
   return (
     <div className="space-y-6">
 
@@ -316,6 +350,59 @@ export default function AnalyticsTab({
           <KPI label="Opportunities"    value={String(opps.length)}        sub={`${active.length} active · ${wins.length} won · ${losses.length} lost`} />
         </div>
       </Section>
+
+      {/* ── Lead funnel ───────────────────────────────────────────────────── */}
+      {leads.length > 0 && (
+        <Section title="Lead Funnel" subtitle="Top of the pipeline — leads by status and conversion into opportunities">
+          <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <KPI label="Total Leads"     value={String(leads.length)}    sub={selectedYear === 'All Years' ? 'all years' : `created in ${selectedYear}`} />
+            <KPI label="Active Leads"    value={String(activeLeads)}     sub="new · contacted · qualified" color="text-blue-600" bg="bg-blue-50" />
+            <KPI label="Converted"       value={String(convertedLeads)}  sub="became opportunities" color="text-emerald-600" bg="bg-emerald-50" />
+            <KPI label="Conversion Rate" value={`${leadConversion}%`}    sub="of decided leads (converted vs dropped)" color={leadConversion >= 50 ? 'text-emerald-600' : 'text-amber-500'} />
+          </div>
+
+          {/* Status bars */}
+          <div className="space-y-3">
+            {leadStageCounts.map(({ status, count, fill }) => (
+              <div key={status} className="flex items-center gap-3">
+                <div className="w-24 shrink-0 text-right"><span className="text-xs font-semibold text-gray-700">{status}</span></div>
+                <div className="flex-1">
+                  <div className="h-3 w-full overflow-hidden rounded-full bg-gray-100">
+                    <div className="h-full rounded-full transition-all" style={{ width: `${(count / maxLeadCount) * 100}%`, backgroundColor: fill }} />
+                  </div>
+                </div>
+                <div className="w-10 shrink-0 text-right text-sm font-bold text-gray-900">{count}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Per-manager breakdown */}
+          {leadMgrRows.length > 0 && (
+            <div className="mt-5">
+              <div className="mb-2 grid grid-cols-6 gap-2 text-xs font-semibold uppercase tracking-wider text-gray-400">
+                <div className="col-span-2">Manager</div>
+                <div className="text-right">Leads</div>
+                <div className="text-right">Active</div>
+                <div className="text-right">Converted</div>
+                <div className="text-right">Conv. Rate</div>
+              </div>
+              <div className="space-y-2">
+                {leadMgrRows.map((r) => (
+                  <div key={r.name} className="grid grid-cols-6 items-center gap-2 rounded-xl bg-gray-50 px-3 py-2">
+                    <div className="col-span-2 text-sm font-semibold text-gray-900">{r.name}</div>
+                    <div className="text-right text-sm text-gray-700">{r.total}</div>
+                    <div className="text-right text-sm text-blue-600">{r.active}</div>
+                    <div className="text-right text-sm font-semibold text-emerald-600">{r.converted}</div>
+                    <div className="text-right">
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${r.rate >= 50 ? 'bg-green-100 text-green-700' : r.rate > 0 ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'}`}>{r.rate}%</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </Section>
+      )}
 
       {/* ── Achievement per manager ───────────────────────────────────────── */}
       <Section title="Annual Target Achievement" subtitle="Win progress vs quota per manager">
