@@ -33,6 +33,20 @@ const ALL_YEARS        = 'All Years'
 
 type Tab = 'Dashboard' | 'Sales Managers' | 'Leads' | 'Opportunities' | 'Analytics' | 'Projection' | 'Targets' | 'Settings'
 
+// Per-area accent: the active pill takes the section's color; inactive tabs
+// show it as a small dot. Matches each area's accents elsewhere in the app
+// (Leads/emerald like "+ New Lead", Opportunities/orange, Targets/amber…).
+const TAB_STYLE: Record<Tab, { active: string; dot: string }> = {
+  'Dashboard':      { active: 'bg-slate-800 text-white shadow-sm',   dot: 'bg-slate-500'   },
+  'Sales Managers': { active: 'bg-blue-600 text-white shadow-sm',    dot: 'bg-blue-400'    },
+  'Leads':          { active: 'bg-emerald-600 text-white shadow-sm', dot: 'bg-emerald-400' },
+  'Opportunities':  { active: 'bg-orange-500 text-white shadow-sm',  dot: 'bg-orange-400'  },
+  'Analytics':      { active: 'bg-indigo-600 text-white shadow-sm',  dot: 'bg-indigo-400'  },
+  'Projection':     { active: 'bg-violet-600 text-white shadow-sm',  dot: 'bg-violet-400'  },
+  'Targets':        { active: 'bg-amber-500 text-white shadow-sm',   dot: 'bg-amber-400'   },
+  'Settings':       { active: 'bg-gray-600 text-white shadow-sm',    dot: 'bg-gray-400'    },
+}
+
 type UserProfile = {
   id: string
   name: string
@@ -704,12 +718,13 @@ export default function Dashboard() {
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`whitespace-nowrap rounded-xl px-5 py-2 text-sm font-medium transition-all duration-150 ${
+                className={`flex items-center gap-1.5 whitespace-nowrap rounded-xl px-4 py-2 text-sm font-medium transition-all duration-150 ${
                   safeTab === tab
-                    ? 'bg-orange-500 text-white shadow-sm'
+                    ? TAB_STYLE[tab].active
                     : 'text-gray-500 hover:text-gray-800'
                 }`}
               >
+                {safeTab !== tab && <span className={`h-1.5 w-1.5 rounded-full ${TAB_STYLE[tab].dot}`} />}
                 {tab}
               </button>
             ))}
