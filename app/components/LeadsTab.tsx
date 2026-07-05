@@ -65,6 +65,7 @@ export default function LeadsTab({
   onOppAdded,
   addFormOpen = false,
   onAddFormOpenChange,
+  managerColors = {},
 }: {
   /** Lead data owned by the Dashboard so the banner/analytics stay in sync. */
   leads: Lead[]
@@ -83,9 +84,12 @@ export default function LeadsTab({
   /** External signal (header button) to open the new-lead form. */
   addFormOpen?: boolean
   onAddFormOpenChange?: (v: boolean) => void
+  managerColors?: Record<string, string>
 }) {
-  const [statusFilter, setStatusFilter] = useState('')
-  const [search, setSearch]             = useState('')
+  const [statusFilter, setStatusFilter]   = useState('')
+  const [search, setSearch]               = useState('')
+  const [filterManager, setFilterManager] = useState('')
+  const [filterCountry, setFilterCountry] = useState('')
 
   const [editing, setEditing]   = useState<Lead | 'new' | null>(null)
   const [form, setForm]         = useState<LeadForm>(emptyForm(''))
@@ -111,18 +115,30 @@ export default function LeadsTab({
 
   const visible = useMemo(() => leads.filter((l) => {
     if (statusFilter && (l.status ?? 'New') !== statusFilter) return false
+    if (filterManager && (l.owner ?? '').toLowerCase() !== filterManager.toLowerCase()) return false
+    if (filterCountry && (l.country ?? '') !== filterCountry) return false
     if (search) {
       const q = search.trim().toLowerCase()
       const hit =
         l.account.toLowerCase().includes(q) ||
         (l.contact_name ?? '').toLowerCase().includes(q) ||
+        (l.contact_email ?? '').toLowerCase().includes(q) ||
         (l.country ?? '').toLowerCase().includes(q) ||
         (l.owner ?? '').toLowerCase().includes(q) ||
         (l.description ?? '').toLowerCase().includes(q)
       if (!hit) return false
     }
     return true
-  }), [leads, statusFilter, search])
+  }), [leads, statusFilter, filterManager, filterCountry, search])
+
+  const countryOptions = useMemo(
+    () => Array.from(new Set(leads.map((l) => l.country ?? '').filter(Boolean))).sort(),
+    [leads],
+  )
+  const anyFilterActive = !!(statusFilter || filterManager || filterCountry || search)
+  function clearAllFilters() {
+    setStatusFilter(''); setFilterManager(''); setFilterCountry(''); setSearch('')
+  }
 
   const activeCount = leads.filter((l) => !['Dropped', 'Converted'].includes(l.status ?? 'New')).length
 
@@ -251,7 +267,38 @@ export default function LeadsTab({
         )}
       </div>
 
-      {/* Filters */}
+      {/* ── Manager quick filter (full-access views) ─────────────────────── */}
+      {!lockedOwner && managers.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Quick filter:</span>
+          <button
+            onClick={() => setFilterManager('')}
+            className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${filterManager === '' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+          >
+            All
+          </button>
+          {managers.map((name) => {
+            const color  = managerColors[name] ?? '#94a3b8'
+            const active = filterManager === name
+            return (
+              <button
+                key={name}
+                onClick={() => setFilterManager(active ? '' : name)}
+                style={{
+                  backgroundColor: active ? color : `${color}22`,
+                  color:           active ? '#fff' : color,
+                  borderColor:     color,
+                }}
+                className="rounded-full border px-3 py-1 text-xs font-semibold transition-all hover:opacity-90"
+              >
+                {name}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {/* ── Status chips + search ─────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Status:</span>
         <button
@@ -273,9 +320,45 @@ export default function LeadsTab({
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search leads…"
-          className="ml-auto w-56 rounded-xl border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm text-gray-900 placeholder-gray-400 transition-colors focus:border-blue-400 focus:bg-white focus:outline-none"
+          placeholder="Search account, contact, country…"
+          className="ml-auto w-64 rounded-xl border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm text-gray-900 placeholder-gray-400 transition-colors focus:border-blue-400 focus:bg-white focus:outline-none"
         />
+      </div>
+
+      {/* ── Dropdown filters ──────────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-center gap-6">
+        {!lockedOwner && managers.length > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Manager</span>
+            <select
+              value={filterManager}
+              onChange={(e) => setFilterManager(e.target.value)}
+              className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm font-medium text-gray-900 transition-colors focus:border-blue-400 focus:bg-white focus:outline-none"
+            >
+              <option value="">All Managers</option>
+              {managers.map((m) => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
+        )}
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Country</span>
+          <select
+            value={filterCountry}
+            onChange={(e) => setFilterCountry(e.target.value)}
+            className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm font-medium text-gray-900 transition-colors focus:border-blue-400 focus:bg-white focus:outline-none"
+          >
+            <option value="">All Countries</option>
+            {countryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+        {anyFilterActive && (
+          <span className="flex items-center gap-3 text-xs text-gray-400">
+            <span className="rounded-full border border-gray-200 bg-white px-2.5 py-0.5 font-semibold text-gray-500 shadow-sm">
+              {visible.length} / {leads.length}
+            </span>
+            <button onClick={clearAllFilters} className="transition-colors hover:text-gray-700">Clear all</button>
+          </span>
+        )}
       </div>
 
       {/* Table */}

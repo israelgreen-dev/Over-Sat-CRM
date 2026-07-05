@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { type Opportunity } from './OpportunitiesTable'
+import { type Lead } from './LeadsTab'
 import { MANAGER_TARGETS, MANAGER_COLORS } from './DashboardAnalytics'
 import ManagerDocuments from './ManagerDocuments'
 import { toUSD, fmtUSD } from '@/lib/currency'
@@ -30,12 +31,14 @@ function fmtShort(n: number) {
 
 export default function ManagersTab({
   opportunities,
+  leads = [],
   managerTargets = MANAGER_TARGETS,
   managers: managerNames = MANAGERS,
   managerColors: managerColorsProp = MANAGER_COLORS,
   uploaderName = '',
 }: {
   opportunities: Opportunity[]
+  leads?: Lead[]
   managerTargets?: Record<string, number>
   managers?: string[]
   managerColors?: Record<string, string>
@@ -53,7 +56,12 @@ export default function ManagersTab({
     const target   = managerTargets[name] ?? 0
     const pct      = target > 0 ? Math.min(Math.round((closed / target) * 100), 999) : 0
     const topDeals = [...opps].sort((a, b) => (b.value ?? 0) - (a.value ?? 0)).slice(0, 3)
-    return { name, target, forecast, closed, open, pct, topDeals, count: opps.length }
+    // Active leads only — dropped/converted no longer need attention.
+    const activeLeads = leads.filter(
+      (l) => (l.owner ?? '').toLowerCase() === name.toLowerCase()
+        && !['Dropped', 'Converted'].includes(l.status ?? 'New'),
+    ).length
+    return { name, target, forecast, closed, open, pct, topDeals, count: opps.length, activeLeads }
   })
 
   const [selected, setSelected] = useState<string | null>(null)
@@ -97,6 +105,7 @@ type ManagerRow = {
   open: number
   pct: number
   count: number
+  activeLeads: number
   topDeals: Opportunity[]
 }
 
@@ -143,11 +152,12 @@ function ManagerDrillDown({
       </div>
 
       {/* Summary strip */}
-      <div className="mb-5 grid grid-cols-3 gap-3">
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
           { label: 'Target',   value: fmtShort(m.target),   cls: 'text-gray-900' },
           { label: 'Won',      value: fmtShort(m.closed),   cls: 'text-green-600' },
           { label: 'Open Pipeline', value: fmtShort(m.open), cls: 'text-blue-600' },
+          { label: 'Active Leads',  value: String(m.activeLeads), cls: 'text-emerald-600' },
         ].map(({ label, value, cls }) => (
           <div key={label} className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm text-center">
             <p className="text-xs text-gray-400">{label}</p>
@@ -229,7 +239,14 @@ function ManagerCard({ m, color, onClick }: { m: ManagerRow; color: string; onCl
           </div>
           <div className="flex-1">
             <h3 className="font-bold text-gray-900">{m.name}</h3>
-            <p className="text-xs text-gray-400">{m.count} opportunit{m.count === 1 ? 'y' : 'ies'}</p>
+            <p className="text-xs text-gray-400">
+              {m.count} opportunit{m.count === 1 ? 'y' : 'ies'}
+              {m.activeLeads > 0 && (
+                <span className="ml-1.5 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-600">
+                  {m.activeLeads} lead{m.activeLeads !== 1 ? 's' : ''}
+                </span>
+              )}
+            </p>
           </div>
           <span className="text-xl font-bold" style={{ color }}>
             {m.pct}%

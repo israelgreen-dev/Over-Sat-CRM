@@ -788,6 +788,7 @@ export default function Dashboard() {
         {safeTab === 'Sales Managers' && isFullAccess && (
           <ManagersTab
             opportunities={liveOpps}
+            leads={leadsError ? [] : leads}
             managerTargets={managerTargets}
             managers={managers}
             managerColors={managerColors}
@@ -808,6 +809,7 @@ export default function Dashboard() {
             onOppAdded={handleOppAdded}
             addFormOpen={addLeadOpen}
             onAddFormOpenChange={setAddLeadOpen}
+            managerColors={managerColors}
           />
         )}
 
