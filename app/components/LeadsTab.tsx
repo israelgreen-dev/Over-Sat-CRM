@@ -116,6 +116,7 @@ export default function LeadsTab({
   // Convert flow state
   const [converting, setConverting]   = useState<Lead | null>(null)
   const [convertName, setConvertName] = useState('')
+  const [deletingId, setDeletingId]   = useState<string | null>(null)
 
   const defaultOwner = lockedOwner ?? (managers.includes(currentUserName) ? currentUserName : '')
 
@@ -229,6 +230,20 @@ export default function LeadsTab({
     const { error } = await supabase.from('leads').delete().eq('id', lead.id)
     if (error) { alert(`Delete failed: ${error.message}`); return }
     setEditing(null)
+    onReload()
+  }
+
+  // Quick delete straight from a table row (same trash mechanism as the
+  // Opportunities table). stopPropagation keeps the row click from opening
+  // the edit modal.
+  async function handleRowDelete(e: React.MouseEvent, lead: Lead) {
+    e.stopPropagation()
+    if (deletingId) return
+    if (!confirm(`Permanently delete lead "${lead.account || 'this lead'}"? This cannot be undone.`)) return
+    setDeletingId(lead.id)
+    const { error } = await supabase.from('leads').delete().eq('id', lead.id)
+    setDeletingId(null)
+    if (error) { alert(`Delete failed: ${error.message}`); return }
     onReload()
   }
 
@@ -473,8 +488,8 @@ export default function LeadsTab({
           <table className="min-w-full divide-y divide-gray-200 text-sm">
             <thead className="bg-gray-50">
               <tr>
-                {['Pri', 'Account', 'Contact', 'Country', 'Manager', 'Status', 'Source', 'Description', 'Updated', ''].map((h, i) => (
-                  <th key={i} className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">{h}</th>
+                {['Account', 'Sales Manager', 'Contact', 'Country', 'Source', 'Priority', 'Status', 'Description', 'Updated', 'Actions'].map((h, i) => (
+                  <th key={i} className={`whitespace-nowrap px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 ${h === 'Actions' ? 'text-right' : 'text-left'}`}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -487,9 +502,7 @@ export default function LeadsTab({
                     onClick={() => !readOnly && !converted && openEdit(lead)}
                     className={`transition-colors ${!readOnly && !converted ? 'cursor-pointer hover:bg-gray-50' : ''} ${converted ? 'opacity-60' : ''}`}
                   >
-                    <td className="whitespace-nowrap px-4 py-3 text-base" title={`${lead.priority ?? 'Medium'} priority`}>
-                      {PRIORITY_ICONS[lead.priority ?? 'Medium'] ?? '🟡'}
-                    </td>
+                    {/* Account (+ website) */}
                     <td className="whitespace-nowrap px-4 py-3">
                       <p className="font-medium text-gray-900">{lead.account}</p>
                       {lead.website && (
@@ -503,6 +516,9 @@ export default function LeadsTab({
                         </a>
                       )}
                     </td>
+                    {/* Sales Manager */}
+                    <td className="whitespace-nowrap px-4 py-3 text-gray-600">{lead.owner || '—'}</td>
+                    {/* Contact */}
                     <td className="px-4 py-3">
                       <p className="whitespace-nowrap text-gray-700">
                         {lead.contact_name || '—'}
@@ -521,31 +537,62 @@ export default function LeadsTab({
                       {lead.contact_title && <p className="text-xs text-gray-500">{lead.contact_title}</p>}
                       {lead.contact_email && <p className="text-xs text-gray-400">{lead.contact_email}</p>}
                     </td>
+                    {/* Country */}
                     <td className="whitespace-nowrap px-4 py-3 text-gray-600">{lead.country || '—'}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-gray-600">{lead.owner || '—'}</td>
+                    {/* Source */}
+                    <td className="whitespace-nowrap px-4 py-3 text-xs text-gray-500">{lead.source || '—'}</td>
+                    {/* Priority */}
+                    <td className="whitespace-nowrap px-4 py-3 text-base" title={`${lead.priority ?? 'Medium'} priority`}>
+                      {PRIORITY_ICONS[lead.priority ?? 'Medium'] ?? '🟡'}
+                    </td>
+                    {/* Status */}
                     <td className="whitespace-nowrap px-4 py-3">
                       <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_COLORS[lead.status ?? 'New'] ?? 'bg-gray-100 text-gray-600'}`}>
                         {lead.status ?? 'New'}
                       </span>
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-xs text-gray-500">{lead.source || '—'}</td>
+                    {/* Description */}
                     <td className="max-w-[200px] truncate px-4 py-3 text-xs text-gray-500" title={lead.description ?? ''}>
                       {lead.description || '—'}
                     </td>
+                    {/* Updated */}
                     <td className="whitespace-nowrap px-4 py-3 text-xs text-gray-400">{updatedFmt.format(new Date(lead.updated_at))}</td>
+                    {/* Actions — convert + delete */}
                     <td className="whitespace-nowrap px-4 py-3 text-right">
-                      {!readOnly && !converted && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); startConvert(lead) }}
-                          title="Convert this lead into an opportunity"
-                          className="rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-600 transition-colors hover:bg-emerald-100"
-                        >
-                          Convert →
-                        </button>
-                      )}
-                      {converted && (
-                        <span className="text-xs font-medium text-emerald-600">✓ In pipeline</span>
-                      )}
+                      <div className="flex items-center justify-end gap-1.5">
+                        {!readOnly && !converted && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); startConvert(lead) }}
+                            title="Convert this lead into an opportunity"
+                            className="rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-600 transition-colors hover:bg-emerald-100"
+                          >
+                            Convert →
+                          </button>
+                        )}
+                        {converted && (
+                          <span className="text-xs font-medium text-emerald-600">✓ In pipeline</span>
+                        )}
+                        {!readOnly && (
+                          <button
+                            onClick={(e) => handleRowDelete(e, lead)}
+                            disabled={deletingId === lead.id}
+                            title="Delete lead"
+                            aria-label={`Delete ${lead.account}`}
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-gray-300 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {deletingId === lead.id ? (
+                              <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                              </svg>
+                            ) : (
+                              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            )}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 )
