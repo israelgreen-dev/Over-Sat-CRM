@@ -818,7 +818,7 @@ export default function Dashboard() {
         {safeTab === 'Opportunities' && (
           <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
             <div className="mb-4">
-              <h3 className="text-sm font-bold text-gray-900">
+              <h3 className="text-base font-bold text-gray-900">
                 {isFullAccess ? 'All Opportunities' : `${viewAs}'s Opportunities`}
               </h3>
               <p className="mt-0.5 text-xs text-gray-400">

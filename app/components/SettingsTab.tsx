@@ -373,14 +373,14 @@ function ListEditor({
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 012.828 2.828L11.828 15.828a2 2 0 01-1.414.586H8v-2.414a2 2 0 01.586-1.414z" />
                   </svg>
                 </button>
-                {/* Remove */}
+                {/* Remove — trash icon, consistent with row deletes everywhere */}
                 <button
                   onClick={() => remove(idx)}
                   className="rounded-lg p-1 text-gray-300 transition-colors hover:bg-red-50 hover:text-red-500"
-                  title={`Remove ${item}`}
+                  title={`Delete ${item}`}
                 >
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                   </svg>
                 </button>
               </>

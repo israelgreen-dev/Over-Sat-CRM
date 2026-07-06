@@ -381,7 +381,7 @@ export default function PipelineTab({
         <table className="min-w-full divide-y divide-gray-200 text-sm">
           <thead className="bg-gray-50">
             <tr>
-              {COLUMNS.map(({ label, field, numeric }) => {
+              {COLUMNS.map(({ label, field }) => {
                 const active = sortKey === field
                 return (
                   <th

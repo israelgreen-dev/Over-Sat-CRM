@@ -170,7 +170,7 @@ function DashboardAnalytics({
       <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm transition-shadow duration-200 hover:shadow-md border-t-4 border-emerald-500">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h3 className="text-[15px] font-semibold text-gray-900">Leads at a Glance</h3>
+            <h3 className="text-sm font-bold text-gray-900">Leads at a Glance</h3>
             <p className="mt-0.5 text-xs text-gray-400">Top of the funnel — manage them in the Leads tab</p>
           </div>
           {(() => {
@@ -210,7 +210,7 @@ function DashboardAnalytics({
 
         {/* Bar chart — HoS: Target vs Forecast per manager | Manager: value by stage */}
         <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm transition-shadow duration-200 hover:shadow-md">
-          <h3 className="text-[15px] font-semibold text-gray-900">
+          <h3 className="text-sm font-bold text-gray-900">
             {isHoS ? 'Target vs Forecast by Manager' : 'My Pipeline by Stage'}
           </h3>
           <p className="mb-4 mt-0.5 text-xs text-gray-400">
@@ -244,7 +244,7 @@ function DashboardAnalytics({
 
         {/* Pipeline by Stage */}
         <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm transition-shadow duration-200 hover:shadow-md">
-          <h3 className="text-[15px] font-semibold text-gray-900">Pipeline by Stage</h3>
+          <h3 className="text-sm font-bold text-gray-900">Pipeline by Stage</h3>
           <p className="mb-5 mt-0.5 text-xs text-gray-400">
             {isHoS ? 'All-team deal value across stages' : 'Your deal value across stages'}
           </p>
@@ -278,7 +278,7 @@ function DashboardAnalytics({
       {/* ── Manager Performance Feed — HoS only ───────────────────────────── */}
       {isHoS && (
         <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm transition-shadow duration-200 hover:shadow-md">
-          <h3 className="mb-5 text-[15px] font-semibold text-gray-900">Sales Manager Performance</h3>
+          <h3 className="mb-5 text-sm font-bold text-gray-900">Sales Manager Performance</h3>
           <div className="space-y-4">
             <div className="mb-1 flex items-center gap-4 border-b border-gray-50 pb-2">
               <div className="w-32 shrink-0" />
@@ -348,7 +348,7 @@ function DashboardAnalytics({
       {/* ── Win Deals — individual manager only ─────────────────────────────── */}
       {!isHoS && closedValue > 0 && (
         <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm transition-shadow duration-200 hover:shadow-md">
-          <h3 className="mb-1 text-[15px] font-semibold text-gray-900">Win Deals</h3>
+          <h3 className="mb-1 text-sm font-bold text-gray-900">Win Deals</h3>
           <p className="mb-4 text-xs text-gray-400">Won opportunities contributing to quota</p>
           <div className="space-y-0.5">
             {opportunities

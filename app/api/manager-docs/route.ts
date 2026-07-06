@@ -65,7 +65,6 @@ export async function POST(req: NextRequest) {
   const sb = adminClient()
 
   // Upload file to Supabase Storage
-  const ext      = file.name.split('.').pop() ?? 'bin'
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
   const path     = `${manager}/${Date.now()}_${safeName}`
 
