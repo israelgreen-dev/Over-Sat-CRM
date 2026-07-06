@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { type Opportunity, SearchableSelect, COUNTRIES, OPPORTUNITY_TYPES, LEAD_SOURCES, PRIORITIES, PRIORITY_ICONS } from './OpportunitiesTable'
 
@@ -68,6 +68,27 @@ const emptyForm = (owner: string): LeadForm => ({
 
 const updatedFmt = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })
 
+// Sortable columns (Actions has no field). Mirrors the Opportunities table.
+const LEAD_COLUMNS: { label: string; field: string }[] = [
+  { label: 'Account',       field: 'account' },
+  { label: 'Sales Manager', field: 'owner' },
+  { label: 'Contact',       field: 'contact_name' },
+  { label: 'Country',       field: 'country' },
+  { label: 'Source',        field: 'source' },
+  { label: 'Priority',      field: 'priority' },
+  { label: 'Status',        field: 'status' },
+  { label: 'Description',   field: 'description' },
+  { label: 'Updated',       field: 'updated_at' },
+  { label: 'Actions',       field: '' },
+]
+const PRIORITY_RANK: Record<string, number> = { High: 0, Medium: 1, Low: 2 }
+
+function leadSortValue(l: Lead, field: string): string | number {
+  if (field === 'updated_at') return new Date(l.updated_at).getTime()
+  if (field === 'priority')   return PRIORITY_RANK[l.priority ?? 'Medium'] ?? 1
+  return String((l as Record<string, unknown>)[field] ?? '').toLowerCase()
+}
+
 export default function LeadsTab({
   leads,
   loading,
@@ -117,6 +138,15 @@ export default function LeadsTab({
   const [converting, setConverting]   = useState<Lead | null>(null)
   const [convertName, setConvertName] = useState('')
   const [deletingId, setDeletingId]   = useState<string | null>(null)
+  const [sortKey, setSortKey]         = useState('')
+  const [sortDir, setSortDir]         = useState<'asc' | 'desc'>('asc')
+  const searchRef                     = useRef<HTMLInputElement>(null)
+
+  function handleSort(field: string) {
+    if (!field) return
+    if (sortKey === field) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    else { setSortKey(field); setSortDir('asc') }
+  }
 
   const defaultOwner = lockedOwner ?? (managers.includes(currentUserName) ? currentUserName : '')
 
@@ -149,7 +179,20 @@ export default function LeadsTab({
       if (!hit) return false
     }
     return true
-  }), [leads, statusFilter, filterManager, filterCountry, search])
+  }), [leads, statusFilter, filterManager, filterCountry, filterSource, filterPriority, search])
+
+  // Sorted view — same click-to-sort mechanism as the Opportunities table.
+  const sorted = useMemo(() => {
+    if (!sortKey) return visible
+    return [...visible].sort((a, b) => {
+      const av = leadSortValue(a, sortKey)
+      const bv = leadSortValue(b, sortKey)
+      let cmp: number
+      if (typeof av === 'number' && typeof bv === 'number') cmp = av - bv
+      else cmp = String(av).localeCompare(String(bv))
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+  }, [visible, sortKey, sortDir])
 
   const countryOptions = useMemo(
     () => Array.from(new Set(leads.map((l) => l.country ?? '').filter(Boolean))).sort(),
@@ -383,7 +426,7 @@ export default function LeadsTab({
         </div>
       )}
 
-      {/* ── Status chips + search ─────────────────────────────────────────── */}
+      {/* ── Status chips ──────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Status:</span>
         <button
@@ -401,13 +444,41 @@ export default function LeadsTab({
             {s}
           </button>
         ))}
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search account, contact, country…"
-          className="ml-auto w-64 rounded-xl border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm text-gray-900 placeholder-gray-400 transition-colors focus:border-blue-400 focus:bg-white focus:outline-none"
-        />
+      </div>
+
+      {/* ── Search bar (same as Opportunities) ───────────────────────────── */}
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1">
+          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
+            <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+          <input
+            ref={searchRef}
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by account, contact, country or manager…"
+            className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2 pl-9 pr-9 text-sm text-gray-900 placeholder-gray-400 transition-colors focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-400/20"
+          />
+          {search && (
+            <button
+              onClick={() => { setSearch(''); searchRef.current?.focus() }}
+              className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 transition-colors hover:text-gray-700"
+              aria-label="Clear search"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
+        {anyFilterActive && (
+          <span className="shrink-0 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-semibold text-gray-500 shadow-sm">
+            {sorted.length} / {leads.length}
+          </span>
+        )}
       </div>
 
       {/* ── Dropdown filters ──────────────────────────────────────────────── */}
@@ -460,9 +531,6 @@ export default function LeadsTab({
         </div>
         {anyFilterActive && (
           <span className="flex items-center gap-3 text-xs text-gray-400">
-            <span className="rounded-full border border-gray-200 bg-white px-2.5 py-0.5 font-semibold text-gray-500 shadow-sm">
-              {visible.length} / {leads.length}
-            </span>
             <button onClick={clearAllFilters} className="transition-colors hover:text-gray-700">Clear all</button>
           </span>
         )}
@@ -478,7 +546,7 @@ export default function LeadsTab({
               ? 'Leads are not enabled yet — run migration 010 in Supabase to activate this tab.'
               : `Failed to load leads: ${error}`}
           </p>
-        ) : visible.length === 0 ? (
+        ) : sorted.length === 0 ? (
           <div className="p-10 text-center">
             <p className="text-sm font-medium text-gray-500">No leads{statusFilter || search ? ' match the filters' : ' yet'}.</p>
             {!readOnly && !statusFilter && !search && (
@@ -489,13 +557,26 @@ export default function LeadsTab({
           <table className="min-w-full divide-y divide-gray-200 text-sm">
             <thead className="bg-gray-50">
               <tr>
-                {['Account', 'Sales Manager', 'Contact', 'Country', 'Source', 'Priority', 'Status', 'Description', 'Updated', 'Actions'].map((h, i) => (
-                  <th key={i} className={`whitespace-nowrap px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 ${h === 'Actions' ? 'text-right' : 'text-left'}`}>{h}</th>
-                ))}
+                {LEAD_COLUMNS.map(({ label, field }) => {
+                  const active = sortKey === field
+                  return (
+                    <th key={label} className={`whitespace-nowrap px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 ${label === 'Actions' ? 'text-right' : 'text-left'}`}>
+                      {field ? (
+                        <button onClick={() => handleSort(field)} className="inline-flex items-center gap-1 transition-colors hover:text-gray-800">
+                          {label}
+                          <span className="flex flex-col leading-none text-[9px]">
+                            <span className={active && sortDir === 'asc'  ? 'text-blue-500' : 'text-gray-300'}>▲</span>
+                            <span className={active && sortDir === 'desc' ? 'text-blue-500' : 'text-gray-300'}>▼</span>
+                          </span>
+                        </button>
+                      ) : label}
+                    </th>
+                  )
+                })}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 bg-white">
-              {visible.map((lead) => {
+              {sorted.map((lead) => {
                 const converted = (lead.status ?? '') === 'Converted'
                 return (
                   <tr
