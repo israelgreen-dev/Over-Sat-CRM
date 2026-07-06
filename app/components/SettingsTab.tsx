@@ -64,7 +64,7 @@ export default function SettingsTab({
           <h3 className="text-sm font-bold text-gray-900">Head of Sales</h3>
         </div>
         <p className="mb-3 text-xs text-gray-400">
-          Sees all pipeline data and aggregated analytics. Not counted as a sales team member.
+          Sees all opportunity data and aggregated analytics. Not counted as a sales team member.
         </p>
         <div className="flex items-center gap-2 rounded-xl bg-gray-50 px-3 py-2">
           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-600 text-xs font-bold text-white">1</span>
@@ -157,7 +157,7 @@ export default function SettingsTab({
         />
         <ListEditor
           title="Partners"
-          description="Partners can view all pipeline data and analytics but cannot access Settings."
+          description="Partners can view all opportunity data and analytics but cannot access Settings."
           items={partners}
           onChange={onPartnersChange}
           placeholder="e.g. Acme Corp"

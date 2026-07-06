@@ -1040,7 +1040,7 @@ export function AddOpportunityModal({
                       <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
                       </svg>
-                      {dupes} deal{dupes !== 1 ? 's' : ''} already exist{dupes === 1 ? 's' : ''} for this account — check the pipeline before creating a duplicate.
+                      {dupes} deal{dupes !== 1 ? 's' : ''} already exist{dupes === 1 ? 's' : ''} for this account — check Opportunities before creating a duplicate.
                     </p>
                   )
                 })()}
@@ -1189,7 +1189,7 @@ export function AddOpportunityModal({
               />
 
               <p className="col-span-2 text-xs text-zinc-400">
-                Contacts, documents and notes can be added after saving — reopen the opportunity from the Pipeline.
+                Contacts, documents and notes can be added after saving — reopen the opportunity from the Opportunities tab.
               </p>
           </div>
 

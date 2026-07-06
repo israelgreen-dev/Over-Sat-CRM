@@ -435,7 +435,7 @@ function ProjectionTab({
               {withoutBreakdown.map((o) => o.name).filter(Boolean).join(' · ')}
             </p>
             <p className="mt-1 text-xs text-amber-500">
-              Open a deal from the Pipeline tab and fill in &quot;Planned Income by Quarter&quot; to include it.
+              Open a deal from the Opportunities tab and fill in &quot;Planned Income by Quarter&quot; to include it.
             </p>
           </div>
         )}
@@ -458,7 +458,7 @@ function EmptyState({ filtered }: { filtered?: boolean }) {
       <p className="mt-1 text-xs text-gray-300">
         {filtered
           ? 'Adjust or clear the filters above.'
-          : 'Open an opportunity in the Pipeline tab and fill in "Planned Income by Quarter".'}
+          : 'Open an opportunity in the Opportunities tab and fill in "Planned Income by Quarter".'}
       </p>
     </div>
   )

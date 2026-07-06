@@ -72,10 +72,10 @@ function InvitePreview({ name, email, role }: { name: string; email: string; rol
           <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400">Your access</p>
           <p className="text-gray-600 text-xs leading-relaxed">
             {role === 'admin' || role === 'head_of_sales'
-              ? 'Full access — view and edit all pipeline data, analytics, targets, and settings.'
+              ? 'Full access — view and edit all leads, opportunities, analytics, targets, and settings.'
               : role === 'manager'
-              ? 'Sales Manager access — view and manage your own pipeline, opportunities, and performance.'
-              : 'Partner access — view-only access to pipeline data and analytics.'}
+              ? 'Sales Manager access — view and manage your own leads, opportunities, and performance.'
+              : 'Partner access — view-only access to opportunity data and analytics.'}
           </p>
         </div>
 

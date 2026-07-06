@@ -328,7 +328,8 @@ export default function LeadsTab({
   const inputCls = 'w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-blue-400 focus:bg-white focus:outline-none transition-colors'
 
   return (
-    <div className="space-y-4">
+    // Same white card frame as the Opportunities tab.
+    <div className="space-y-4 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
 
       {/* Header row */}
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -341,7 +342,7 @@ export default function LeadsTab({
         {!readOnly && (
           <button
             onClick={openNew}
-            className="flex items-center gap-1.5 rounded-lg bg-orange-500 px-3.5 py-2 text-sm font-semibold text-white transition-colors hover:bg-orange-400"
+            className="flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3.5 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-400"
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -468,7 +469,7 @@ export default function LeadsTab({
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm">
+      <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
         {loading ? (
           <p className="p-8 text-center text-sm text-gray-400">Loading leads…</p>
         ) : error ? (
@@ -481,7 +482,7 @@ export default function LeadsTab({
           <div className="p-10 text-center">
             <p className="text-sm font-medium text-gray-500">No leads{statusFilter || search ? ' match the filters' : ' yet'}.</p>
             {!readOnly && !statusFilter && !search && (
-              <p className="mt-1 text-xs text-gray-400">Click <span className="font-semibold text-orange-500">New Lead</span> to capture your first prospect.</p>
+              <p className="mt-1 text-xs text-gray-400">Click <span className="font-semibold text-emerald-600">New Lead</span> to capture your first prospect.</p>
             )}
           </div>
         ) : (
@@ -570,7 +571,7 @@ export default function LeadsTab({
                           </button>
                         )}
                         {converted && (
-                          <span className="text-xs font-medium text-emerald-600">✓ In pipeline</span>
+                          <span className="text-xs font-medium text-emerald-600">✓ In Opportunities</span>
                         )}
                         {!readOnly && (
                           <button

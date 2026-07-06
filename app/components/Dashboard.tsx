@@ -517,7 +517,7 @@ export default function Dashboard() {
   if (oppsLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-900">
-        <p className="text-sm text-slate-400">Loading pipeline…</p>
+        <p className="text-sm text-slate-400">Loading opportunities…</p>
       </div>
     )
   }
@@ -752,7 +752,7 @@ export default function Dashboard() {
                   {isHoS ? headOfSales : viewAs}
                 </h2>
                 <p className="mt-0.5 text-sm text-slate-400">
-                  {isFullAccess ? 'Full pipeline visibility' : 'Personal pipeline'}
+                  {isFullAccess ? 'Full opportunity visibility' : 'Personal opportunities'}
                 </p>
               </div>
               <div className="flex flex-wrap gap-3">

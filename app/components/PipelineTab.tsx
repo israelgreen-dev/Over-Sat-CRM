@@ -425,7 +425,7 @@ export default function PipelineTab({
                   ) : (
                     <div>
                       <p className="text-sm font-medium text-gray-500">No opportunities yet.</p>
-                      <p className="mt-1 text-xs text-gray-400">Click the orange <span className="font-semibold text-orange-500">+ New</span> button in the top bar to add your first deal.</p>
+                      <p className="mt-1 text-xs text-gray-400">Click the orange <span className="font-semibold text-orange-500">+ New Opportunity</span> button in the top bar to add your first deal.</p>
                     </div>
                   )}
                 </td>
