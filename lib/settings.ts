@@ -13,7 +13,7 @@
  */
 
 import { supabase } from './supabase'
-import type { NotificationSettings } from './notification-types'
+import type { NotificationConfig } from './notification-types'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -39,7 +39,7 @@ export type CRMSettings = {
   probabilityDefaults:        Record<string, number>
   managerColors:              Record<string, string>
   managerTerritories:         Record<string, string>
-  notificationSettings:       NotificationSettings
+  notificationSettings:       NotificationConfig
 }
 
 // ── localStorage keys ─────────────────────────────────────────────────────────

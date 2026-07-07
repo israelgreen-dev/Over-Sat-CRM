@@ -18,7 +18,7 @@ import LoginScreen from './LoginScreen'
 import SetupScreen from './SetupScreen'
 import ResetPasswordScreen from './ResetPasswordScreen'
 import { loadSettings, saveSettings } from '@/lib/settings'
-import { DEFAULT_NOTIFICATION_SETTINGS, type NotificationSettings } from '@/lib/notification-types'
+import { DEFAULT_NOTIFICATION_CONFIG, normalizeNotificationConfig, type NotificationConfig } from '@/lib/notification-types'
 
 // ── Module-level constants ─────────────────────────────────────────────────────
 // CURRENT_YEAR is evaluated once at module load — never changes within a session,
@@ -213,8 +213,8 @@ export default function Dashboard() {
   const [managerColorOverrides, setManagerColorOverrides] = useState<Record<string, string>>({})
   // Free-text territory per manager (keyed by manager name).
   const [managerTerritories, setManagerTerritories] = useState<Record<string, string>>({})
-  // Email notification preferences (admin/HoS recipients, event + delivery mode).
-  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(DEFAULT_NOTIFICATION_SETTINGS)
+  // Email notification preferences — Admin and Head of Sales configured separately.
+  const [notificationSettings, setNotificationSettings] = useState<NotificationConfig>(DEFAULT_NOTIFICATION_CONFIG)
 
   // ── Year selector ─────────────────────────────────────────────────────────
   const [selectedYear, setSelectedYear] = useState<string>(CURRENT_YEAR)
@@ -282,7 +282,7 @@ export default function Dashboard() {
       if (s.probabilityDefaults)     setProbabilityDefaults({ ...DEFAULT_PROBABILITY, ...s.probabilityDefaults })
       if (s.managerColors)           setManagerColorOverrides(s.managerColors)
       if (s.managerTerritories)      setManagerTerritories(s.managerTerritories)
-      if (s.notificationSettings)    setNotificationSettings({ ...DEFAULT_NOTIFICATION_SETTINGS, ...s.notificationSettings })
+      if (s.notificationSettings)    setNotificationSettings(normalizeNotificationConfig(s.notificationSettings))
       setSettingsLoaded(true)
     })
   }, [])

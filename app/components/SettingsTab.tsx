@@ -1,7 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { NOTIFICATION_EVENTS, EVENT_LABELS, DEFAULT_NOTIFICATION_SETTINGS, type NotificationSettings, type NotificationMode } from '@/lib/notification-types'
+import {
+  NOTIFICATION_EVENTS, EVENT_LABELS, NOTIFY_ROLES, NOTIFY_ROLE_LABELS,
+  DEFAULT_NOTIFICATION_CONFIG,
+  type NotificationConfig, type NotificationSettings, type NotificationMode, type NotifyRole,
+} from '@/lib/notification-types'
 
 const PROBABILITY_STAGES = ['Discovery', 'Proposal', 'Negotiation', 'Win', 'Loss']
 
@@ -24,7 +28,7 @@ export default function SettingsTab({
   onManagerColorChange,
   onManagerTerritoryChange,
   onProbabilityDefaultsChange,
-  notificationSettings = DEFAULT_NOTIFICATION_SETTINGS,
+  notificationSettings = DEFAULT_NOTIFICATION_CONFIG,
   onNotificationSettingsChange,
 }: {
   managers: string[]
@@ -41,8 +45,8 @@ export default function SettingsTab({
   onManagerColorChange: (name: string, color: string) => void
   onManagerTerritoryChange: (name: string, territory: string) => void
   onProbabilityDefaultsChange: (v: Record<string, number>) => void
-  notificationSettings?: NotificationSettings
-  onNotificationSettingsChange?: (v: NotificationSettings) => void
+  notificationSettings?: NotificationConfig
+  onNotificationSettingsChange?: (v: NotificationConfig) => void
 }) {
   const [hosEditing, setHosEditing] = useState(false)
   const [hosVal, setHosVal]         = useState(headOfSales)
@@ -138,80 +142,27 @@ export default function SettingsTab({
         </div>
       </div>
 
-      {/* ── Email notifications ─────────────────────────────────────────────── */}
+      {/* ── Email notifications — independent per role ─────────────────────── */}
       <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
         <div className="mb-1 flex items-center gap-2">
           <span className="h-2.5 w-2.5 rounded-full bg-rose-500" />
           <h3 className="text-sm font-bold text-gray-900">Email Notifications</h3>
-          {/* Enable toggle */}
-          <label className="ml-auto inline-flex cursor-pointer items-center gap-2">
-            <span className={`text-xs font-semibold ${notificationSettings.enabled ? 'text-emerald-600' : 'text-gray-400'}`}>
-              {notificationSettings.enabled ? 'Enabled' : 'Disabled'}
-            </span>
-            <button
-              type="button"
-              onClick={() => onNotificationSettingsChange?.({ ...notificationSettings, enabled: !notificationSettings.enabled })}
-              className={`relative h-6 w-11 rounded-full transition-colors ${notificationSettings.enabled ? 'bg-emerald-500' : 'bg-gray-200'}`}
-              title={notificationSettings.enabled ? 'Turn notifications off' : 'Turn notifications on'}
-            >
-              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${notificationSettings.enabled ? 'left-[22px]' : 'left-0.5'}`} />
-            </button>
-          </label>
         </div>
         <p className="mb-4 text-xs text-gray-400">
-          Emails go to every <span className="font-semibold text-gray-500">Admin</span> and{' '}
-          <span className="font-semibold text-gray-500">Head of Sales</span> user automatically.
-          Sending requires the SMTP settings to be configured on the server (see the deployment notes).
+          Admin and Head of Sales are configured separately — each group has its own delivery
+          schedule and event selection, sent to every user of that role. Sending requires the
+          SMTP settings to be configured on the server (see the deployment notes).
         </p>
 
-        <div className={notificationSettings.enabled ? '' : 'pointer-events-none opacity-40'}>
-          {/* Delivery mode */}
-          <div className="mb-4">
-            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-400">Delivery</p>
-            <div className="flex flex-wrap gap-2">
-              {([
-                ['instant', 'On every event'],
-                ['daily',   'Daily summary'],
-                ['weekly',  'Weekly summary (Mondays)'],
-                ['monthly', 'Monthly summary (1st)'],
-              ] as [NotificationMode, string][]).map(([mode, label]) => (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => onNotificationSettingsChange?.({ ...notificationSettings, mode })}
-                  className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-                    notificationSettings.mode === mode
-                      ? 'bg-rose-500 text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Event toggles */}
-          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-400">Notify about</p>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {NOTIFICATION_EVENTS.map((ev) => {
-              const on = notificationSettings.events?.[ev] !== false
-              return (
-                <label key={ev} className="flex cursor-pointer items-center gap-2 rounded-xl bg-gray-50 px-3 py-2">
-                  <input
-                    type="checkbox"
-                    checked={on}
-                    onChange={() => onNotificationSettingsChange?.({
-                      ...notificationSettings,
-                      events: { ...notificationSettings.events, [ev]: !on },
-                    })}
-                    className="h-4 w-4 rounded border-gray-300 text-rose-500 focus:ring-rose-400"
-                  />
-                  <span className="text-sm text-gray-700">{EVENT_LABELS[ev]}</span>
-                </label>
-              )
-            })}
-          </div>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {NOTIFY_ROLES.map((role) => (
+            <RoleNotificationPanel
+              key={role}
+              role={role}
+              settings={notificationSettings[role]}
+              onChange={(v) => onNotificationSettingsChange?.({ ...notificationSettings, [role]: v })}
+            />
+          ))}
         </div>
       </div>
 
@@ -245,6 +196,85 @@ export default function SettingsTab({
           placeholder="e.g. Acme Corp"
           accent="#10b981"
         />
+      </div>
+    </div>
+  )
+}
+
+// One role's notification configuration (Admin / Head of Sales).
+function RoleNotificationPanel({
+  role,
+  settings,
+  onChange,
+}: {
+  role: NotifyRole
+  settings: NotificationSettings
+  onChange: (v: NotificationSettings) => void
+}) {
+  const accent = role === 'admin' ? 'bg-purple-500' : 'bg-slate-600'
+  return (
+    <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-4">
+      <div className="mb-3 flex items-center gap-2">
+        <span className={`h-2 w-2 rounded-full ${accent}`} />
+        <h4 className="text-sm font-bold text-gray-900">{NOTIFY_ROLE_LABELS[role]}</h4>
+        <label className="ml-auto inline-flex cursor-pointer items-center gap-2">
+          <span className={`text-xs font-semibold ${settings.enabled ? 'text-emerald-600' : 'text-gray-400'}`}>
+            {settings.enabled ? 'Enabled' : 'Disabled'}
+          </span>
+          <button
+            type="button"
+            onClick={() => onChange({ ...settings, enabled: !settings.enabled })}
+            className={`relative h-6 w-11 rounded-full transition-colors ${settings.enabled ? 'bg-emerald-500' : 'bg-gray-200'}`}
+            title={settings.enabled ? `Turn ${NOTIFY_ROLE_LABELS[role]} notifications off` : `Turn ${NOTIFY_ROLE_LABELS[role]} notifications on`}
+          >
+            <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${settings.enabled ? 'left-[22px]' : 'left-0.5'}`} />
+          </button>
+        </label>
+      </div>
+
+      <div className={settings.enabled ? '' : 'pointer-events-none opacity-40'}>
+        {/* Delivery mode */}
+        <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-400">Delivery</p>
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {([
+            ['instant', 'On every event'],
+            ['daily',   'Daily'],
+            ['weekly',  'Weekly (Mon)'],
+            ['monthly', 'Monthly (1st)'],
+          ] as [NotificationMode, string][]).map(([mode, label]) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => onChange({ ...settings, mode })}
+              className={`rounded-full px-2.5 py-1 text-xs font-semibold transition-colors ${
+                settings.mode === mode
+                  ? 'bg-rose-500 text-white'
+                  : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Event toggles */}
+        <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-400">Notify about</p>
+        <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+          {NOTIFICATION_EVENTS.map((ev) => {
+            const on = settings.events?.[ev] !== false
+            return (
+              <label key={ev} className="flex cursor-pointer items-center gap-2 rounded-lg bg-white px-2.5 py-1.5 border border-gray-100">
+                <input
+                  type="checkbox"
+                  checked={on}
+                  onChange={() => onChange({ ...settings, events: { ...settings.events, [ev]: !on } })}
+                  className="h-4 w-4 rounded border-gray-300 text-rose-500 focus:ring-rose-400"
+                />
+                <span className="text-xs text-gray-700">{EVENT_LABELS[ev]}</span>
+              </label>
+            )
+          })}
+        </div>
       </div>
     </div>
   )

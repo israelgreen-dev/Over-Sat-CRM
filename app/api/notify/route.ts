@@ -1,19 +1,22 @@
 /**
  * /api/notify — instant email notifications.
  * The client calls this (fire-and-forget) after a lead/opportunity is
- * created, updated or deleted. Recipients are resolved automatically:
- * every user whose role is admin or head_of_sales.
+ * created, updated or deleted. Admin and Head of Sales each have their own
+ * configuration (enabled / mode / events) and receive independently.
  *
- * No-ops (200) when notifications are disabled, the event is unchecked,
- * the mode is a digest, or SMTP isn't configured yet.
+ * No-ops (200) whenever nothing applies (disabled, digest mode, event
+ * unchecked, SMTP not configured).
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireUser } from '@/lib/api-auth'
 import { rateLimit, callerIp } from '@/lib/rate-limit'
 import { sendMail, emailShell, mailerConfigured } from '@/lib/mailer'
-import { serviceClient, resolveRecipients } from '@/lib/recipients'
-import { NOTIFICATION_EVENTS, EVENT_LABELS, type NotificationEvent, type NotificationSettings } from '@/lib/notification-types'
+import { serviceClient, resolveRecipientsByRole } from '@/lib/recipients'
+import {
+  NOTIFICATION_EVENTS, EVENT_LABELS, NOTIFY_ROLES,
+  normalizeNotificationConfig, type NotificationEvent,
+} from '@/lib/notification-types'
 
 export async function POST(req: NextRequest) {
   if (!rateLimit(callerIp(req), 60)) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
@@ -28,14 +31,20 @@ export async function POST(req: NextRequest) {
 
   const sb = serviceClient()
   const { data: settingsRow } = await sb.from('crm_settings').select('notification_settings').eq('id', 1).single()
-  const settings = (settingsRow?.notification_settings ?? {}) as Partial<NotificationSettings>
+  const config = normalizeNotificationConfig(settingsRow?.notification_settings)
 
-  if (!settings.enabled)                  return NextResponse.json({ sent: false, reason: 'disabled' })
-  if (settings.mode !== 'instant')        return NextResponse.json({ sent: false, reason: 'digest-mode' })
-  if (settings.events?.[event] === false) return NextResponse.json({ sent: false, reason: 'event-off' })
-  if (!mailerConfigured())                return NextResponse.json({ sent: false, reason: 'smtp-not-configured' })
+  // Which role groups want this event instantly?
+  const wantingRoles = NOTIFY_ROLES.filter((role) => {
+    const c = config[role]
+    return c.enabled && c.mode === 'instant' && c.events?.[event] !== false
+  })
+  if (wantingRoles.length === 0) return NextResponse.json({ sent: false, reason: 'no-role-subscribed' })
+  if (!mailerConfigured())       return NextResponse.json({ sent: false, reason: 'smtp-not-configured' })
 
-  const recipients = await resolveRecipients(sb)
+  const byRole = await resolveRecipientsByRole(sb)
+  const recipients = Array.from(new Set(wantingRoles.flatMap((r) => byRole[r])))
+  if (recipients.length === 0) return NextResponse.json({ sent: false, reason: 'no-recipients' })
+
   const label   = EVENT_LABELS[event]
   const subject = `[Over-Sat CRM] ${label}${name ? `: ${name}` : ''}`
   const body    = emailShell('Instant notification', `
@@ -46,7 +55,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const sent = await sendMail(recipients, subject, body)
-    return NextResponse.json({ sent })
+    return NextResponse.json({ sent, roles: wantingRoles })
   } catch (e) {
     return NextResponse.json({ sent: false, reason: e instanceof Error ? e.message : 'send-failed' })
   }
