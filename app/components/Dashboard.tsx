@@ -18,6 +18,7 @@ import LoginScreen from './LoginScreen'
 import SetupScreen from './SetupScreen'
 import ResetPasswordScreen from './ResetPasswordScreen'
 import { loadSettings, saveSettings } from '@/lib/settings'
+import { DEFAULT_NOTIFICATION_SETTINGS, type NotificationSettings } from '@/lib/notification-types'
 
 // ── Module-level constants ─────────────────────────────────────────────────────
 // CURRENT_YEAR is evaluated once at module load — never changes within a session,
@@ -212,6 +213,8 @@ export default function Dashboard() {
   const [managerColorOverrides, setManagerColorOverrides] = useState<Record<string, string>>({})
   // Free-text territory per manager (keyed by manager name).
   const [managerTerritories, setManagerTerritories] = useState<Record<string, string>>({})
+  // Email notification preferences (admin/HoS recipients, event + delivery mode).
+  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(DEFAULT_NOTIFICATION_SETTINGS)
 
   // ── Year selector ─────────────────────────────────────────────────────────
   const [selectedYear, setSelectedYear] = useState<string>(CURRENT_YEAR)
@@ -279,6 +282,7 @@ export default function Dashboard() {
       if (s.probabilityDefaults)     setProbabilityDefaults({ ...DEFAULT_PROBABILITY, ...s.probabilityDefaults })
       if (s.managerColors)           setManagerColorOverrides(s.managerColors)
       if (s.managerTerritories)      setManagerTerritories(s.managerTerritories)
+      if (s.notificationSettings)    setNotificationSettings({ ...DEFAULT_NOTIFICATION_SETTINGS, ...s.notificationSettings })
       setSettingsLoaded(true)
     })
   }, [])
@@ -300,10 +304,11 @@ export default function Dashboard() {
         probabilityDefaults,
         managerColors: managerColorOverrides,
         managerTerritories,
+        notificationSettings,
       })
     }, 600)
     return () => clearTimeout(t)
-  }, [settingsLoaded, managers, products, headOfSales, partners, targetsByYear, quarterlyTargetsByYear, productTargetRowsByYear, probabilityDefaults, managerColorOverrides, managerTerritories])
+  }, [settingsLoaded, managers, products, headOfSales, partners, targetsByYear, quarterlyTargetsByYear, productTargetRowsByYear, probabilityDefaults, managerColorOverrides, managerTerritories, notificationSettings])
 
   const overallTarget = useMemo(
     () => Object.values(managerTargets).reduce((s, v) => s + v, 0),
@@ -896,6 +901,8 @@ export default function Dashboard() {
               onManagerColorChange={handleManagerColorChange}
               onManagerTerritoryChange={handleManagerTerritoryChange}
               onProbabilityDefaultsChange={setProbabilityDefaults}
+              notificationSettings={notificationSettings}
+              onNotificationSettingsChange={setNotificationSettings}
             />
             {/* ── User & Password Management ───────────────────────────── */}
             <div>

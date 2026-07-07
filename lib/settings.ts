@@ -13,6 +13,7 @@
  */
 
 import { supabase } from './supabase'
+import type { NotificationSettings } from './notification-types'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -38,6 +39,7 @@ export type CRMSettings = {
   probabilityDefaults:        Record<string, number>
   managerColors:              Record<string, string>
   managerTerritories:         Record<string, string>
+  notificationSettings:       NotificationSettings
 }
 
 // ── localStorage keys ─────────────────────────────────────────────────────────
@@ -53,6 +55,7 @@ const LS = {
   probabilityDefaults:     'oversat_crm_probability_defaults',
   managerColors:           'oversat_crm_manager_colors',
   managerTerritories:      'oversat_crm_manager_territories',
+  notificationSettings:    'oversat_crm_notification_settings',
   legacyTargets:           'oversat_crm_manager_targets', // v1 key — migration only
 } as const
 
@@ -71,6 +74,7 @@ function readLS(): Partial<CRMSettings> {
     const pd  = localStorage.getItem(LS.probabilityDefaults);     if (pd)  out.probabilityDefaults     = JSON.parse(pd)
     const mc  = localStorage.getItem(LS.managerColors);           if (mc)  out.managerColors           = JSON.parse(mc)
     const mt  = localStorage.getItem(LS.managerTerritories);      if (mt)  out.managerTerritories      = JSON.parse(mt)
+    const ns  = localStorage.getItem(LS.notificationSettings);    if (ns)  out.notificationSettings    = JSON.parse(ns)
     return out
   } catch {
     return {}
@@ -89,6 +93,7 @@ function writeLS(s: Partial<CRMSettings>): void {
     if (s.probabilityDefaults     !== undefined) localStorage.setItem(LS.probabilityDefaults,     JSON.stringify(s.probabilityDefaults))
     if (s.managerColors           !== undefined) localStorage.setItem(LS.managerColors,           JSON.stringify(s.managerColors))
     if (s.managerTerritories      !== undefined) localStorage.setItem(LS.managerTerritories,      JSON.stringify(s.managerTerritories))
+    if (s.notificationSettings    !== undefined) localStorage.setItem(LS.notificationSettings,    JSON.stringify(s.notificationSettings))
   } catch {
     // Ignore quota errors
   }
@@ -123,6 +128,7 @@ export async function loadSettings(): Promise<Partial<CRMSettings>> {
       probabilityDefaults:     data.probability_defaults        ?? ls.probabilityDefaults,
       managerColors:           data.manager_colors              ?? ls.managerColors,
       managerTerritories:      data.manager_territories         ?? ls.managerTerritories,
+      notificationSettings:    data.notification_settings       ?? ls.notificationSettings,
     }
 
     writeLS(remote) // Refresh local cache from Supabase
@@ -152,18 +158,20 @@ export async function saveSettings(s: Partial<CRMSettings>): Promise<void> {
     if (s.probabilityDefaults     !== undefined) row.probability_defaults        = s.probabilityDefaults
     if (s.managerColors           !== undefined) row.manager_colors              = s.managerColors
     if (s.managerTerritories      !== undefined) row.manager_territories         = s.managerTerritories
+    if (s.notificationSettings    !== undefined) row.notification_settings       = s.notificationSettings
 
     // Progressive fallback: strip columns missing from older DB schemas
     // (migration 002 adds probability_defaults / manager_colors; 005 adds
     // manager_territories) so one unknown column doesn't block the rest of
     // the settings from syncing.
     const payload = { ...row }
-    for (let attempt = 0; attempt < 5; attempt++) {
+    for (let attempt = 0; attempt < 6; attempt++) {
       const { error } = await supabase.from('crm_settings').upsert(payload)
       if (!error) break
       if (error.message?.includes('probability_defaults')) { delete payload.probability_defaults; continue }
       if (error.message?.includes('manager_colors'))       { delete payload.manager_colors;       continue }
       if (error.message?.includes('manager_territories'))  { delete payload.manager_territories;  continue }
+      if (error.message?.includes('notification_settings')) { delete payload.notification_settings; continue }
       break
     }
   } catch {

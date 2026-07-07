@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
+import { notifyEvent } from '@/lib/notify'
 
 export type Opportunity = {
   id: string | number
@@ -400,6 +401,7 @@ export function Modal({
     const { error } = await supabase.from('opportunities').delete().eq('id', opportunity.id)
     setDeleting(false)
     if (error) { setSaveError(error.message); return }
+    notifyEvent('opp_deleted', opportunity.name ?? '')
     onDeleted?.()
     onClose()
   }
@@ -470,6 +472,7 @@ export function Modal({
 
     setSaving(false)
     if (sbError) { setSaveError(sbError.message); return false }
+    notifyEvent('opp_updated', draft.name)
     onSaved({ ...opportunity, ...payload })
     return true
   }
@@ -948,6 +951,7 @@ export function AddOpportunityModal({
       }])
     }
 
+    notifyEvent('opp_created', form.name.trim())
     onAdded(newOpp)
     onClose()
   }

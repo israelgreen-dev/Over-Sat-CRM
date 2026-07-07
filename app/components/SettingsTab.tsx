@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { NOTIFICATION_EVENTS, EVENT_LABELS, DEFAULT_NOTIFICATION_SETTINGS, type NotificationSettings, type NotificationMode } from '@/lib/notification-types'
 
 const PROBABILITY_STAGES = ['Discovery', 'Proposal', 'Negotiation', 'Win', 'Loss']
 
@@ -23,6 +24,8 @@ export default function SettingsTab({
   onManagerColorChange,
   onManagerTerritoryChange,
   onProbabilityDefaultsChange,
+  notificationSettings = DEFAULT_NOTIFICATION_SETTINGS,
+  onNotificationSettingsChange,
 }: {
   managers: string[]
   products: string[]
@@ -38,6 +41,8 @@ export default function SettingsTab({
   onManagerColorChange: (name: string, color: string) => void
   onManagerTerritoryChange: (name: string, territory: string) => void
   onProbabilityDefaultsChange: (v: Record<string, number>) => void
+  notificationSettings?: NotificationSettings
+  onNotificationSettingsChange?: (v: NotificationSettings) => void
 }) {
   const [hosEditing, setHosEditing] = useState(false)
   const [hosVal, setHosVal]         = useState(headOfSales)
@@ -130,6 +135,83 @@ export default function SettingsTab({
               </div>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* ── Email notifications ─────────────────────────────────────────────── */}
+      <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+        <div className="mb-1 flex items-center gap-2">
+          <span className="h-2.5 w-2.5 rounded-full bg-rose-500" />
+          <h3 className="text-sm font-bold text-gray-900">Email Notifications</h3>
+          {/* Enable toggle */}
+          <label className="ml-auto inline-flex cursor-pointer items-center gap-2">
+            <span className={`text-xs font-semibold ${notificationSettings.enabled ? 'text-emerald-600' : 'text-gray-400'}`}>
+              {notificationSettings.enabled ? 'Enabled' : 'Disabled'}
+            </span>
+            <button
+              type="button"
+              onClick={() => onNotificationSettingsChange?.({ ...notificationSettings, enabled: !notificationSettings.enabled })}
+              className={`relative h-6 w-11 rounded-full transition-colors ${notificationSettings.enabled ? 'bg-emerald-500' : 'bg-gray-200'}`}
+              title={notificationSettings.enabled ? 'Turn notifications off' : 'Turn notifications on'}
+            >
+              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${notificationSettings.enabled ? 'left-[22px]' : 'left-0.5'}`} />
+            </button>
+          </label>
+        </div>
+        <p className="mb-4 text-xs text-gray-400">
+          Emails go to every <span className="font-semibold text-gray-500">Admin</span> and{' '}
+          <span className="font-semibold text-gray-500">Head of Sales</span> user automatically.
+          Sending requires the SMTP settings to be configured on the server (see the deployment notes).
+        </p>
+
+        <div className={notificationSettings.enabled ? '' : 'pointer-events-none opacity-40'}>
+          {/* Delivery mode */}
+          <div className="mb-4">
+            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-400">Delivery</p>
+            <div className="flex flex-wrap gap-2">
+              {([
+                ['instant', 'On every event'],
+                ['daily',   'Daily summary'],
+                ['weekly',  'Weekly summary (Mondays)'],
+                ['monthly', 'Monthly summary (1st)'],
+              ] as [NotificationMode, string][]).map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => onNotificationSettingsChange?.({ ...notificationSettings, mode })}
+                  className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                    notificationSettings.mode === mode
+                      ? 'bg-rose-500 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Event toggles */}
+          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-400">Notify about</p>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {NOTIFICATION_EVENTS.map((ev) => {
+              const on = notificationSettings.events?.[ev] !== false
+              return (
+                <label key={ev} className="flex cursor-pointer items-center gap-2 rounded-xl bg-gray-50 px-3 py-2">
+                  <input
+                    type="checkbox"
+                    checked={on}
+                    onChange={() => onNotificationSettingsChange?.({
+                      ...notificationSettings,
+                      events: { ...notificationSettings.events, [ev]: !on },
+                    })}
+                    className="h-4 w-4 rounded border-gray-300 text-rose-500 focus:ring-rose-400"
+                  />
+                  <span className="text-sm text-gray-700">{EVENT_LABELS[ev]}</span>
+                </label>
+              )
+            })}
+          </div>
         </div>
       </div>
 

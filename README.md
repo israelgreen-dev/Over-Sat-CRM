@@ -32,6 +32,14 @@ Required env vars (`.env.local`, never committed):
 NEXT_PUBLIC_SUPABASE_URL=…
 NEXT_PUBLIC_SUPABASE_ANON_KEY=…
 SUPABASE_SERVICE_ROLE_KEY=…      # server-only, used by /api/admin/* and /api/manager-docs
+
+# Email notifications (optional — the module no-ops until these exist)
+SMTP_HOST=…                      # e.g. smtp.office365.com / smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=…
+SMTP_PASS=…
+SMTP_FROM="Over-Sat CRM <crm@over-sat.com>"
+CRON_SECRET=…                    # protects /api/notifications/digest (Vercel Cron)
 ```
 
 ## Architecture
@@ -117,6 +125,7 @@ Run in order in the Supabase SQL editor. All are idempotent (safe to re-run).
 | 012 | Lead contact title + LinkedIn |
 | 013 | Website/source/priority on opportunities |
 | 014 | **Security:** names → `app_metadata`, ownership RLS rewrite |
+| 015 | Email notifications: settings column + lead audit trail |
 
 ## Deploying
 

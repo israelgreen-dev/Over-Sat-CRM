@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
+import { notifyEvent } from '@/lib/notify'
 import { type Opportunity, SearchableSelect, COUNTRIES, OPPORTUNITY_TYPES, LEAD_SOURCES, PRIORITIES, PRIORITY_ICONS } from './OpportunitiesTable'
 
 /**
@@ -264,6 +265,7 @@ export default function LeadsTab({
     }
     setBusy(false)
     if (sbError) { setFormError(sbError.message); return }
+    notifyEvent(editing === 'new' ? 'lead_created' : 'lead_updated', String(payload.account))
     setEditing(null)
     onReload()
   }
@@ -272,6 +274,7 @@ export default function LeadsTab({
     if (!confirm(`Delete lead "${lead.account}"? This cannot be undone.`)) return
     const { error } = await supabase.from('leads').delete().eq('id', lead.id)
     if (error) { alert(`Delete failed: ${error.message}`); return }
+    notifyEvent('lead_deleted', lead.account)
     setEditing(null)
     onReload()
   }
@@ -287,6 +290,7 @@ export default function LeadsTab({
     const { error } = await supabase.from('leads').delete().eq('id', lead.id)
     setDeletingId(null)
     if (error) { alert(`Delete failed: ${error.message}`); return }
+    notifyEvent('lead_deleted', lead.account)
     onReload()
   }
 
@@ -364,6 +368,7 @@ export default function LeadsTab({
     setBusy(false)
     setConverting(null)
     setEditing(null)
+    notifyEvent('opp_created', convertName.trim())
     onOppAdded(newOpp)
     onReload()
   }

@@ -4,6 +4,7 @@ import { useState, useRef } from 'react'
 import { type Opportunity, Modal, AddOpportunityModal, effectiveProbability, weightedValue, getProductLines } from './OpportunitiesTable'
 import { fmtUSD } from '@/lib/currency'
 import { supabase } from '@/lib/supabase'
+import { notifyEvent } from '@/lib/notify'
 
 const STAGE_COLORS: Record<string, string> = {
   Discovery:   'bg-blue-100 text-blue-700',
@@ -218,6 +219,7 @@ export default function PipelineTab({
     const { error } = await supabase.from('opportunities').delete().eq('id', opp.id)
     setDeletingId(null)
     if (error) { alert(`Delete failed: ${error.message}`); return }
+    notifyEvent('opp_deleted', opp.name ?? '')
     if (selected?.id === opp.id) setSelected(null)
     onOppDeleted?.(opp.id)
   }
