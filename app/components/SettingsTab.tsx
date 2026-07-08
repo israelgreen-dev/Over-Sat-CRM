@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { supabase } from '@/lib/supabase'
 import {
   NOTIFICATION_EVENTS, EVENT_LABELS, NOTIFY_ROLES, NOTIFY_ROLE_LABELS,
   DEFAULT_NOTIFICATION_CONFIG,
@@ -50,6 +51,24 @@ export default function SettingsTab({
 }) {
   const [hosEditing, setHosEditing] = useState(false)
   const [hosVal, setHosVal]         = useState(headOfSales)
+
+  // Recipient emails per role — read-only, sourced from the Users section.
+  const [roleEmails, setRoleEmails] = useState<Record<NotifyRole, string[]>>({ admin: [], head_of_sales: [] })
+  useEffect(() => {
+    void (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session?.access_token) return
+        const res = await fetch('/api/admin/users', { headers: { Authorization: `Bearer ${session.access_token}` } })
+        if (!res.ok) return
+        const users = await res.json() as { email: string; role: string }[]
+        setRoleEmails({
+          admin:         users.filter((u) => u.role === 'admin').map((u) => u.email).filter(Boolean),
+          head_of_sales: users.filter((u) => u.role === 'head_of_sales').map((u) => u.email).filter(Boolean),
+        })
+      } catch { /* panel simply shows the generic hint */ }
+    })()
+  }, [])
 
   function commitHos() {
     const v = hosVal.trim()
@@ -160,6 +179,7 @@ export default function SettingsTab({
               key={role}
               role={role}
               settings={notificationSettings[role]}
+              recipients={roleEmails[role]}
               onChange={(v) => onNotificationSettingsChange?.({ ...notificationSettings, [role]: v })}
             />
           ))}
@@ -205,10 +225,13 @@ export default function SettingsTab({
 function RoleNotificationPanel({
   role,
   settings,
+  recipients,
   onChange,
 }: {
   role: NotifyRole
   settings: NotificationSettings
+  /** Read-only — the emails of every user with this role (Users section). */
+  recipients: string[]
   onChange: (v: NotificationSettings) => void
 }) {
   const accent = role === 'admin' ? 'bg-purple-500' : 'bg-slate-600'
@@ -276,20 +299,21 @@ function RoleNotificationPanel({
           })}
         </div>
 
-        {/* Recipients override */}
+        {/* Recipients — read-only, sourced from the Users section */}
         <p className="mb-1.5 mt-3 text-xs font-semibold uppercase tracking-wider text-gray-400">Send to</p>
-        <input
-          type="text"
-          value={(settings.recipients ?? []).join(', ')}
-          onChange={(e) => onChange({
-            ...settings,
-            recipients: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
-          })}
-          placeholder={`Auto — every ${NOTIFY_ROLE_LABELS[role]} user`}
-          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-900 placeholder-gray-400 focus:border-rose-400 focus:outline-none transition-colors"
-        />
+        {recipients.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {recipients.map((email) => (
+              <span key={email} className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700">
+                {email}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-gray-400">No {NOTIFY_ROLE_LABELS[role]} users found.</p>
+        )}
         <p className="mt-1 text-[11px] text-gray-400">
-          Comma-separated email addresses. Leave empty to send automatically to every {NOTIFY_ROLE_LABELS[role]} user.
+          Automatic — every {NOTIFY_ROLE_LABELS[role]} user. Manage the list in the Users section below.
         </p>
       </div>
     </div>

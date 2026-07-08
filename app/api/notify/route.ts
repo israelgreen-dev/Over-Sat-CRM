@@ -41,13 +41,9 @@ export async function POST(req: NextRequest) {
   if (wantingRoles.length === 0) return NextResponse.json({ sent: false, reason: 'no-role-subscribed' })
   if (!mailerConfigured())       return NextResponse.json({ sent: false, reason: 'smtp-not-configured' })
 
-  // Explicit per-role recipient lists take precedence; otherwise all users
-  // of the role receive the email.
+  // Recipients come from the user accounts of the subscribed roles.
   const byRole = await resolveRecipientsByRole(sb)
-  const recipients = Array.from(new Set(wantingRoles.flatMap((r) => {
-    const explicit = (config[r].recipients ?? []).map((e) => e.trim()).filter((e) => e.includes('@'))
-    return explicit.length > 0 ? explicit : byRole[r]
-  })))
+  const recipients = Array.from(new Set(wantingRoles.flatMap((r) => byRole[r])))
   if (recipients.length === 0) return NextResponse.json({ sent: false, reason: 'no-recipients' })
 
   const label   = EVENT_LABELS[event]

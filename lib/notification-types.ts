@@ -22,13 +22,12 @@ export const EVENT_LABELS: Record<NotificationEvent, string> = {
 
 export type NotificationMode = 'instant' | 'daily' | 'weekly' | 'monthly'
 
-/** Per-role configuration. */
+/** Per-role configuration. Recipients are always derived from the user
+ *  accounts of that role (Users section) — never stored here. */
 export type NotificationSettings = {
   enabled: boolean
   mode: NotificationMode
   events: Partial<Record<NotificationEvent, boolean>>
-  /** Explicit recipient emails. Empty/absent = automatic (all users of the role). */
-  recipients?: string[]
 }
 
 export const NOTIFY_ROLES = ['admin', 'head_of_sales'] as const

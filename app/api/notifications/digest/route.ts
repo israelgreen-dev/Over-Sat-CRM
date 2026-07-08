@@ -73,9 +73,7 @@ export async function GET(req: NextRequest) {
     const c = config[role]
     if (!c.enabled || c.mode === 'instant') { results[role] = 'not-digest'; continue }
     if (cronOk && !isDue(c.mode, now))      { results[role] = 'not-due';    continue }
-    // Explicit recipient list takes precedence over the automatic role emails.
-    const explicit = (c.recipients ?? []).map((e) => e.trim()).filter((e) => e.includes('@'))
-    const recipients = explicit.length > 0 ? explicit : byRole[role as NotifyRole]
+    const recipients = byRole[role as NotifyRole]
     if (recipients.length === 0)            { results[role] = 'no-recipients'; continue }
 
     const since = windowStart(c.mode, now)
