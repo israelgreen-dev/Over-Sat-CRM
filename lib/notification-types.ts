@@ -27,6 +27,8 @@ export type NotificationSettings = {
   enabled: boolean
   mode: NotificationMode
   events: Partial<Record<NotificationEvent, boolean>>
+  /** Explicit recipient emails. Empty/absent = automatic (all users of the role). */
+  recipients?: string[]
 }
 
 export const NOTIFY_ROLES = ['admin', 'head_of_sales'] as const

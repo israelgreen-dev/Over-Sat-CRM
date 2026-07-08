@@ -275,6 +275,22 @@ function RoleNotificationPanel({
             )
           })}
         </div>
+
+        {/* Recipients override */}
+        <p className="mb-1.5 mt-3 text-xs font-semibold uppercase tracking-wider text-gray-400">Send to</p>
+        <input
+          type="text"
+          value={(settings.recipients ?? []).join(', ')}
+          onChange={(e) => onChange({
+            ...settings,
+            recipients: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
+          })}
+          placeholder={`Auto — every ${NOTIFY_ROLE_LABELS[role]} user`}
+          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-900 placeholder-gray-400 focus:border-rose-400 focus:outline-none transition-colors"
+        />
+        <p className="mt-1 text-[11px] text-gray-400">
+          Comma-separated email addresses. Leave empty to send automatically to every {NOTIFY_ROLE_LABELS[role]} user.
+        </p>
       </div>
     </div>
   )
