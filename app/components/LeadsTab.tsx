@@ -692,14 +692,19 @@ export default function LeadsTab({
       {/* ── Add / Edit modal ─────────────────────────────────────────────── */}
       {editing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-4 flex items-center justify-between">
+          {/* Same structure as the opportunity window: fixed header, scrollable
+              body, footer with the action buttons always visible. */}
+          <div className="flex max-h-[88vh] w-full max-w-lg flex-col rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            {/* Fixed header */}
+            <div className="flex shrink-0 items-center justify-between border-b border-zinc-100 px-6 py-4">
               <h3 className="text-base font-bold text-gray-900">{editing === 'new' ? 'New Lead' : 'Edit Lead'}</h3>
               <button onClick={() => setEditing(null)} aria-label="Close" className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 transition-colors">
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
 
+            {/* Scrollable body */}
+            <div className="flex-1 overflow-y-auto px-6 py-5">
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Company Name *</label>
@@ -782,8 +787,10 @@ export default function LeadsTab({
             </div>
 
             {formError && <p className="mt-3 text-xs text-red-500">{formError}</p>}
+            </div>
 
-            <div className="mt-5 flex items-center justify-between">
+            {/* Fixed footer — actions always visible */}
+            <div className="flex shrink-0 items-center justify-between border-t border-zinc-100 px-6 py-4">
               <div>
                 {editing !== 'new' && (
                   <button onClick={() => deleteLead(editing as Lead)} className="rounded-lg px-3 py-2 text-sm font-medium text-red-500 transition-colors hover:bg-red-50">
