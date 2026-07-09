@@ -24,7 +24,11 @@ export async function POST(req: NextRequest) {
   const { user, error: authError } = await requireUser(req)
   if (authError || !user) return NextResponse.json({ error: authError ?? 'Unauthorized' }, { status: 401 })
 
-  const { event, name } = await req.json() as { event: NotificationEvent; name?: string }
+  const { event, name, details } = await req.json() as {
+    event: NotificationEvent
+    name?: string
+    details?: Record<string, string>
+  }
   if (!NOTIFICATION_EVENTS.includes(event)) {
     return NextResponse.json({ error: 'Unknown event' }, { status: 400 })
   }
@@ -46,11 +50,26 @@ export async function POST(req: NextRequest) {
   const recipients = Array.from(new Set(wantingRoles.flatMap((r) => byRole[r])))
   if (recipients.length === 0) return NextResponse.json({ sent: false, reason: 'no-recipients' })
 
+  // User-entered values go into HTML — escape them.
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
+  // Details table (label → value), capped for safety.
+  const rows = Object.entries(details ?? {})
+    .slice(0, 20)
+    .filter(([, v]) => typeof v === 'string' && v.trim())
+    .map(([k, v]) =>
+      `<tr>
+        <td style="padding:4px 12px 4px 0;color:#9ca3af;font-size:12px;white-space:nowrap;vertical-align:top">${esc(k.slice(0, 40))}</td>
+        <td style="padding:4px 0;color:#1f2937;font-size:13px">${esc(v.slice(0, 300))}</td>
+      </tr>`,
+    ).join('')
+
   const label   = EVENT_LABELS[event]
   const subject = `[Over-Sat CRM] ${label}${name ? `: ${name}` : ''}`
   const body    = emailShell('Instant notification', `
-    <p><strong>${label}</strong>${name ? ` — <strong>${name}</strong>` : ''}</p>
-    <p style="color:#6b7280">By ${user.email} · ${new Date().toUTCString()}</p>
+    <p style="margin-top:0"><strong>${label}</strong>${name ? ` — <strong>${esc(name)}</strong>` : ''}</p>
+    ${rows ? `<table style="border-collapse:collapse;margin:8px 0">${rows}</table>` : ''}
+    <p style="color:#6b7280;font-size:12px">By ${esc(user.email)} · ${new Date().toUTCString()}</p>
     <p><a href="https://over-sat-crm.com" style="color:#f97316">Open the CRM →</a></p>
   `)
 

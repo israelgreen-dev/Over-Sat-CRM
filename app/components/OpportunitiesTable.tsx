@@ -401,7 +401,13 @@ export function Modal({
     const { error } = await supabase.from('opportunities').delete().eq('id', opportunity.id)
     setDeleting(false)
     if (error) { setSaveError(error.message); return }
-    notifyEvent('opp_deleted', opportunity.name ?? '')
+    notifyEvent('opp_deleted', opportunity.name ?? '', {
+      'Opportunity':   opportunity.name ?? '',
+      'Account':       opportunity.customer_name ?? '',
+      'Sales Manager': (opportunity.owner as string) ?? '',
+      'Stage':         opportunity.stage ?? '',
+      'Value':         opportunity.value != null ? `${(opportunity as any).currency ?? 'USD'} ${Number(opportunity.value).toLocaleString('en-US')}` : '',
+    })
     onDeleted?.()
     onClose()
   }
@@ -472,7 +478,19 @@ export function Modal({
 
     setSaving(false)
     if (sbError) { setSaveError(sbError.message); return false }
-    notifyEvent('opp_updated', draft.name)
+    notifyEvent('opp_updated', draft.name, {
+      'Opportunity':      draft.name,
+      'Account':          draft.customer_name,
+      'Sales Manager':    draft.owner,
+      'Stage':            draft.stage,
+      'Status':           draft.status,
+      'Value':            dealValue != null ? `${draft.currency} ${Number(dealValue).toLocaleString('en-US')}` : '',
+      'Products':         productSummary(cleanLines),
+      'Close Date':       draft.close_date,
+      'Country':          draft.country,
+      'Opportunity Type': draft.opportunity_type,
+      'Priority':         draft.priority,
+    })
     onSaved({ ...opportunity, ...payload })
     return true
   }
@@ -951,7 +969,20 @@ export function AddOpportunityModal({
       }])
     }
 
-    notifyEvent('opp_created', form.name.trim())
+    notifyEvent('opp_created', form.name.trim(), {
+      'Opportunity':      form.name.trim(),
+      'Account':          form.customer_name.trim(),
+      'Sales Manager':    form.owner,
+      'Stage':            form.stage,
+      'Value':            dealValue != null ? `${form.currency} ${Number(dealValue).toLocaleString('en-US')}` : '',
+      'Products':         productSummary(cleanLines),
+      'Close Date':       form.close_date,
+      'Country':          form.country,
+      'Opportunity Type': form.opportunity_type,
+      'Source':           form.source,
+      'Priority':         form.priority,
+      'Contact':          form.contact_name.trim(),
+    })
     onAdded(newOpp)
     onClose()
   }

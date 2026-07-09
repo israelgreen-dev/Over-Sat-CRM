@@ -265,7 +265,21 @@ export default function LeadsTab({
     }
     setBusy(false)
     if (sbError) { setFormError(sbError.message); return }
-    notifyEvent(editing === 'new' ? 'lead_created' : 'lead_updated', String(payload.account))
+    notifyEvent(editing === 'new' ? 'lead_created' : 'lead_updated', String(payload.account), {
+      'Account':          String(payload.account ?? ''),
+      'Website':          String(payload.website ?? ''),
+      'Contact':          String(payload.contact_name ?? ''),
+      'Job Title':        String(payload.contact_title ?? ''),
+      'Email':            String(payload.contact_email ?? ''),
+      'Phone':            String(payload.contact_phone ?? ''),
+      'Country':          String(payload.country ?? ''),
+      'Sales Manager':    String(payload.owner ?? ''),
+      'Status':           String(payload.status ?? ''),
+      'Source':           String(payload.source ?? ''),
+      'Opportunity Type': String(payload.opportunity_type ?? ''),
+      'Priority':         String(payload.priority ?? ''),
+      'Description':      String(payload.description ?? ''),
+    })
     setEditing(null)
     onReload()
   }
@@ -274,7 +288,9 @@ export default function LeadsTab({
     if (!confirm(`Delete lead "${lead.account}"? This cannot be undone.`)) return
     const { error } = await supabase.from('leads').delete().eq('id', lead.id)
     if (error) { alert(`Delete failed: ${error.message}`); return }
-    notifyEvent('lead_deleted', lead.account)
+    notifyEvent('lead_deleted', lead.account, {
+      'Account': lead.account, 'Sales Manager': lead.owner, 'Country': lead.country, 'Status': lead.status,
+    })
     setEditing(null)
     onReload()
   }
@@ -290,7 +306,9 @@ export default function LeadsTab({
     const { error } = await supabase.from('leads').delete().eq('id', lead.id)
     setDeletingId(null)
     if (error) { alert(`Delete failed: ${error.message}`); return }
-    notifyEvent('lead_deleted', lead.account)
+    notifyEvent('lead_deleted', lead.account, {
+      'Account': lead.account, 'Sales Manager': lead.owner, 'Country': lead.country, 'Status': lead.status,
+    })
     onReload()
   }
 
@@ -368,7 +386,17 @@ export default function LeadsTab({
     setBusy(false)
     setConverting(null)
     setEditing(null)
-    notifyEvent('opp_created', convertName.trim())
+    notifyEvent('opp_created', convertName.trim(), {
+      'Opportunity':      convertName.trim(),
+      'Account':          converting.account,
+      'Sales Manager':    converting.owner,
+      'Country':          converting.country,
+      'Opportunity Type': converting.opportunity_type,
+      'Source':           converting.source,
+      'Priority':         converting.priority,
+      'Stage':            'Discovery',
+      'Converted from':   'Lead',
+    })
     onOppAdded(newOpp)
     onReload()
   }

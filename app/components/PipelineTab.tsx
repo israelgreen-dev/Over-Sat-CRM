@@ -219,7 +219,13 @@ export default function PipelineTab({
     const { error } = await supabase.from('opportunities').delete().eq('id', opp.id)
     setDeletingId(null)
     if (error) { alert(`Delete failed: ${error.message}`); return }
-    notifyEvent('opp_deleted', opp.name ?? '')
+    notifyEvent('opp_deleted', opp.name ?? '', {
+      'Opportunity':   opp.name ?? '',
+      'Account':       opp.customer_name ?? '',
+      'Sales Manager': (opp.owner as string) ?? '',
+      'Stage':         opp.stage ?? '',
+      'Value':         opp.value != null ? `${(opp as any).currency ?? 'USD'} ${Number(opp.value).toLocaleString('en-US')}` : '',
+    })
     if (selected?.id === opp.id) setSelected(null)
     onOppDeleted?.(opp.id)
   }
