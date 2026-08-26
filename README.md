@@ -69,19 +69,27 @@ app/
     ProjectionTab.tsx         Quarterly income projection + CSV report
     TargetsTab.tsx            Per-manager product targets + quarterly split
     ManagersTab.tsx           Manager cards, drill-down, documents
-    SettingsTab.tsx           Managers/products/partners lists, colors, territories,
-                              probability defaults
-    UsersTab.tsx              User management (create/invite/edit/delete, roles)
+    SettingsTab.tsx           Products list, probability defaults, email notifications
+    UsersTab.tsx              User management — the single source of truth for people:
+                              accounts, roles, dual-role flag, manager colors/territories
     ManagerDocuments.tsx      Per-manager file attachments
     ErrorBoundary.tsx         Crash screen + self-hosted error reporting
   api/
     admin/users/route.ts      List/create/update/delete users (admin/HoS only)
     admin/invite/route.ts     Magic-link invitations (admin/HoS only)
     manager-docs/route.ts     Manager document upload/list/delete (authenticated)
+    team/route.ts             Name+role directory (any signed-in user) — the app
+                              derives manager/partner/HoS lists from accounts
+    notify/route.ts           Instant notification emails (per-role config)
+    notifications/digest/     Daily/weekly/monthly summaries (Vercel Cron, 06:00 UTC)
 lib/
   supabase.ts                 Browser Supabase client (anon key)
   api-auth.ts                 requireUser / requireAdmin — Bearer-token checks
   settings.ts                 CRM settings load/save (Supabase + localStorage cache)
+  notification-types.ts       Per-role notification config shapes
+  notify.ts                   Client fire-and-forget event ping
+  mailer.ts                   nodemailer wrapper (env-gated SMTP)
+  recipients.ts               Role → recipient email resolution
   currency.ts                 Fixed FX rates, toUSD / fmtUSD
   rate-limit.ts               In-memory API rate limiter
 supabase/migrations/          Numbered SQL migrations (run in the SQL editor)
@@ -99,6 +107,11 @@ reference only `app_metadata`.
 | `head_of_sales` | Everything; delete rights |
 | `manager` | Own leads + own opportunities (RLS-enforced by owner name); no Targets/Settings |
 | `partner` | Read-only view of data and analytics |
+
+Dual role: an admin/HoS can carry `app_metadata.also_manager` ("Also acts as
+Sales Manager" in the Users tab) — they then appear in every manager list
+(owner dropdowns, targets, analytics) while keeping their primary permissions.
+Manager/partner/HoS lists everywhere derive from accounts via `/api/team`.
 
 Key protections: pre-auth page contains no data; `/api/*` routes require
 Bearer tokens and rate-limit; deletes are confirmed; every opportunity change
