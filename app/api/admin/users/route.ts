@@ -45,6 +45,8 @@ export async function GET(req: NextRequest) {
     // app_metadata is authoritative; user_metadata only as legacy fallback
     name:       u.app_metadata?.name ?? u.user_metadata?.name ?? '',
     role:       u.app_metadata?.role ?? u.user_metadata?.role ?? '',
+    // Dual role: an admin/HoS who also works a pipeline as a sales manager.
+    alsoManager: !!u.app_metadata?.also_manager,
     created_at: u.created_at,
   }))
 
@@ -119,7 +121,7 @@ export async function PATCH(req: NextRequest) {
   const supabaseAdmin = adminClient()
   if (!supabaseAdmin) return NextResponse.json({ error: 'Service role key not configured' }, { status: 503 })
 
-  const { userId, password, name, role, sendResetEmail, email } = await req.json()
+  const { userId, password, name, role, sendResetEmail, email, alsoManager } = await req.json()
   if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 })
 
   if (sendResetEmail) {
@@ -152,11 +154,14 @@ export async function PATCH(req: NextRequest) {
   if (name) updates.user_metadata = { ...existingUserMeta, name }
   // Name + role live in app_metadata (server-only) so users can't self-edit
   // them — RLS matches deal/lead ownership by app_metadata name.
-  if (role || name) {
+  // also_manager: dual role — an admin/HoS who additionally acts as a
+  // sales manager (appears in manager lists, targets and analytics).
+  if (role || name || typeof alsoManager === 'boolean') {
     updates.app_metadata = {
       ...existingAppMeta,
       ...(role ? { role } : {}),
       ...(name ? { name } : {}),
+      ...(typeof alsoManager === 'boolean' ? { also_manager: alsoManager } : {}),
     }
   }
 

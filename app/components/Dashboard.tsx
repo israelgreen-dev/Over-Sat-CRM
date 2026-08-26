@@ -206,7 +206,7 @@ export default function Dashboard() {
   // Managers / partners / head of sales derive from real user accounts
   // (/api/team). The stored settings lists remain a fallback while the team
   // loads (or if the fetch fails) so the UI never goes empty.
-  const [team, setTeam] = useState<{ name: string; role: string }[] | null>(null)
+  const [team, setTeam] = useState<{ name: string; role: string; alsoManager?: boolean }[] | null>(null)
 
   useEffect(() => {
     if (!profile?.role) return
@@ -227,8 +227,14 @@ export default function Dashboard() {
   const [storedPartners, setStoredPartners] = useState<string[]>([])
 
   // Derived people lists (team wins; stored settings as fallback).
+  // Managers = manager-role users plus admins/HoS flagged as "also a
+  // sales manager" (dual role — e.g. an admin who owns a pipeline).
   const managers = useMemo(
-    () => team ? team.filter((t) => t.role === 'manager').map((t) => t.name) : storedManagers,
+    () => team
+      ? team
+          .filter((t) => t.role === 'manager' || (t.alsoManager && (t.role === 'admin' || t.role === 'head_of_sales')))
+          .map((t) => t.name)
+      : storedManagers,
     [team, storedManagers],
   )
   const partners = useMemo(

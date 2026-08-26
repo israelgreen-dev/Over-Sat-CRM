@@ -7,6 +7,8 @@ type User = {
   id: string
   name: string
   role: 'admin' | 'head_of_sales' | 'manager' | 'partner'
+  /** Dual role: an admin/HoS who also acts as a sales manager. */
+  alsoManager?: boolean
   email: string
   created_at: string
 }
@@ -258,7 +260,7 @@ export default function UsersTab({ currentUserId }: { currentUserId: string }) {
     setPendingInvite(created)
   }
 
-  async function updateUser(id: string, updates: { name?: string; role?: string; password?: string }) {
+  async function updateUser(id: string, updates: { name?: string; role?: string; password?: string; alsoManager?: boolean }) {
     if (updates.password && updates.password.length < 8) { setError('Password must be at least 8 characters'); return }
     setBusy(true); setError(null)
     const res = await fetch('/api/admin/users', {
@@ -456,6 +458,11 @@ export default function UsersTab({ currentUserId }: { currentUserId: string }) {
                         {ROLE_LABELS[u.role as User['role']] ?? u.role}
                       </span>
                     ) : '—'}
+                    {u.alsoManager && (u.role === 'admin' || u.role === 'head_of_sales') && (
+                      <span className="ml-1.5 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700" title="Also acts as a Sales Manager — appears in manager lists, targets and analytics">
+                        + Sales Manager
+                      </span>
+                    )}
                   </td>
                   <td className="px-5 py-3">
                     {editingId !== u.id && resetUserId !== u.id && (
@@ -509,11 +516,13 @@ export default function UsersTab({ currentUserId }: { currentUserId: string }) {
 }
 
 // ── Edit row ──────────────────────────────────────────────────────────────────
-function EditRow({ user, onSave, onCancel, busy }: { user: User; onSave: (u: { name: string; role: string; password?: string }) => void; onCancel: () => void; busy: boolean }) {
+function EditRow({ user, onSave, onCancel, busy }: { user: User; onSave: (u: { name: string; role: string; password?: string; alsoManager?: boolean }) => void; onCancel: () => void; busy: boolean }) {
   const [name, setName]         = useState(user.name)
   const [role, setRole]         = useState(user.role)
   const [password, setPassword] = useState('')
   const [showPw, setShowPw]     = useState(false)
+  const [alsoManager, setAlsoManager] = useState(!!user.alsoManager)
+  const dualEligible = role === 'admin' || role === 'head_of_sales'
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2 flex-wrap">
@@ -548,9 +557,21 @@ function EditRow({ user, onSave, onCancel, busy }: { user: User; onSave: (u: { n
           onChange={(e) => setPassword(e.target.value)}
         />
       )}
+      {dualEligible && (
+        <label className="flex w-fit cursor-pointer items-center gap-2 rounded-lg bg-blue-50 px-2.5 py-1.5">
+          <input
+            type="checkbox"
+            checked={alsoManager}
+            onChange={(e) => setAlsoManager(e.target.checked)}
+            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-400"
+          />
+          <span className="text-xs font-medium text-blue-700">Also acts as Sales Manager</span>
+          <span className="text-[10px] text-blue-400">(own pipeline, targets, analytics)</span>
+        </label>
+      )}
       <div className="flex items-center gap-2">
         <button
-          onClick={() => onSave({ name, role, ...(password ? { password } : {}) })}
+          onClick={() => onSave({ name, role, alsoManager: dualEligible ? alsoManager : false, ...(password ? { password } : {}) })}
           disabled={busy || !name.trim()}
           className="rounded-lg bg-green-600 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50"
         >

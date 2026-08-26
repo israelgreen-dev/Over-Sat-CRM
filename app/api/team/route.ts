@@ -25,6 +25,8 @@ export async function GET(req: NextRequest) {
     .map((u) => ({
       name: (u.app_metadata?.name as string) ?? (u.user_metadata?.name as string) ?? '',
       role: (u.app_metadata?.role as string) ?? (u.user_metadata?.role as string) ?? '',
+      // Dual role: admin/HoS who also acts as a sales manager.
+      alsoManager: !!u.app_metadata?.also_manager,
     }))
     .filter((u) => u.name && ['admin', 'head_of_sales', 'manager', 'partner'].includes(u.role))
 
