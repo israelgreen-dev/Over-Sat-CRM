@@ -15,33 +15,16 @@ const STAGE_ACCENTS: Record<string, string> = {
 }
 
 export default function SettingsTab({
-  managers,
   products,
-  headOfSales,
-  partners,
-  managerColors,
-  managerTerritories,
   probabilityDefaults,
   onProductsChange,
-  onManagerColorChange,
-  onManagerTerritoryChange,
   onProbabilityDefaultsChange,
   notificationSettings = DEFAULT_NOTIFICATION_CONFIG,
   onNotificationSettingsChange,
 }: {
-  /** Derived from user accounts (role = manager) — managed in Users below. */
-  managers: string[]
   products: string[]
-  /** Derived from the user with the head_of_sales role. */
-  headOfSales: string
-  /** Derived from user accounts (role = partner). */
-  partners: string[]
-  managerColors: Record<string, string>
-  managerTerritories: Record<string, string>
   probabilityDefaults: Record<string, number>
   onProductsChange: (v: string[]) => void
-  onManagerColorChange: (name: string, color: string) => void
-  onManagerTerritoryChange: (name: string, territory: string) => void
   onProbabilityDefaultsChange: (v: Record<string, number>) => void
   notificationSettings?: NotificationConfig
   onNotificationSettingsChange?: (v: NotificationConfig) => void
@@ -70,95 +53,9 @@ export default function SettingsTab({
       <div>
         <h2 className="text-base font-bold text-gray-900">Settings</h2>
         <p className="mt-0.5 text-sm text-gray-400">
-          People are managed in User Management below — the team here derives from those accounts.
+          People — including manager colors and territories — are managed in User Management below.
           Targets are managed in the Targets tab.
         </p>
-      </div>
-
-      {/* ── Sales Team — derived from user accounts ─────────────────────────── */}
-      <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-        <div className="mb-1 flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full bg-blue-500" />
-          <h3 className="text-sm font-bold text-gray-900">Sales Team</h3>
-        </div>
-        <p className="mb-4 text-xs text-gray-400">
-          Derived automatically from user accounts and their roles — add, rename or remove people in{' '}
-          <span className="font-semibold text-gray-500">User Management</span> below.
-          Pick each manager&apos;s color (used in all charts) and territory here.
-        </p>
-
-        {/* Head of Sales */}
-        <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-400">Head of Sales</p>
-        <div className="mb-4 flex items-center gap-2 rounded-xl bg-gray-50 px-3 py-2">
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-600 text-xs font-bold text-white">
-            {headOfSales ? headOfSales[0] : '—'}
-          </span>
-          <span className="text-sm font-medium text-gray-900">{headOfSales || <span className="text-gray-400">No Head of Sales account yet</span>}</span>
-        </div>
-
-        {/* Managers with color + territory */}
-        <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-400">Sales Managers</p>
-        <ul className="mb-4 space-y-1.5">
-          {managers.length === 0 && (
-            <li className="rounded-xl bg-gray-50 px-3 py-3 text-center text-xs text-gray-400">
-              No Sales Manager accounts yet — create them in User Management below.
-            </li>
-          )}
-          {managers.map((name) => (
-            <li key={name} className="rounded-xl bg-gray-50 px-3 py-2">
-              <div className="flex items-center gap-2">
-                <span
-                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
-                  style={{ backgroundColor: managerColors[name] ?? '#94a3b8' }}
-                >
-                  {name[0]}
-                </span>
-                <span className="flex-1 text-sm font-medium text-gray-900">{name}</span>
-                <label
-                  className="relative h-6 w-6 shrink-0 cursor-pointer overflow-hidden rounded-lg border border-gray-200 transition-transform hover:scale-110"
-                  style={{ backgroundColor: managerColors[name] ?? '#94a3b8' }}
-                  title={`Change color for ${name}`}
-                >
-                  <input
-                    type="color"
-                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                    value={managerColors[name] ?? '#94a3b8'}
-                    onChange={(e) => onManagerColorChange(name, e.target.value)}
-                  />
-                </label>
-              </div>
-              <div className="mt-2 flex items-center gap-2 pl-8">
-                <svg className="h-3.5 w-3.5 shrink-0 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                <input
-                  type="text"
-                  placeholder="Territory (e.g. EMEA, West Coast)…"
-                  value={managerTerritories[name] ?? ''}
-                  onChange={(e) => onManagerTerritoryChange(name, e.target.value)}
-                  className="flex-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 placeholder-gray-400 focus:border-blue-400 focus:outline-none transition-colors"
-                />
-              </div>
-            </li>
-          ))}
-        </ul>
-
-        {/* Partners */}
-        <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-400">Partners</p>
-        {partners.length === 0 ? (
-          <p className="rounded-xl bg-gray-50 px-3 py-3 text-center text-xs text-gray-400">
-            No Partner accounts yet — create them in User Management below.
-          </p>
-        ) : (
-          <div className="flex flex-wrap gap-1.5">
-            {partners.map((name) => (
-              <span key={name} className="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
-                {name}
-              </span>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* ── Probability defaults ───────────────────────────────────────────── */}

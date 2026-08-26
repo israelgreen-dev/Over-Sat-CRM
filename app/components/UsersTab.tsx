@@ -202,7 +202,20 @@ function InviteModal({
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
-export default function UsersTab({ currentUserId }: { currentUserId: string }) {
+export default function UsersTab({
+  currentUserId,
+  managerColors = {},
+  managerTerritories = {},
+  onManagerColorChange,
+  onManagerTerritoryChange,
+}: {
+  currentUserId: string
+  /** Chart color + territory per manager name (applies to manager-role and dual-role users). */
+  managerColors?: Record<string, string>
+  managerTerritories?: Record<string, string>
+  onManagerColorChange?: (name: string, color: string) => void
+  onManagerTerritoryChange?: (name: string, territory: string) => void
+}) {
   const [users, setUsers]         = useState<User[]>([])
   const [loading, setLoading]     = useState(true)
   const [showForm, setShowForm]   = useState(false)
@@ -433,7 +446,7 @@ export default function UsersTab({ currentUserId }: { currentUserId: string }) {
           <table className="min-w-full divide-y divide-gray-100 text-sm">
             <thead className="bg-gray-50">
               <tr>
-                {['Name', 'Email', 'Role', 'Actions'].map((h) => (
+                {['Name', 'Email', 'Role', 'Color & Territory', 'Actions'].map((h) => (
                   <th key={h} className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-400">{h}</th>
                 ))}
               </tr>
@@ -462,6 +475,34 @@ export default function UsersTab({ currentUserId }: { currentUserId: string }) {
                       <span className="ml-1.5 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700" title="Also acts as a Sales Manager — appears in manager lists, targets and analytics">
                         + Sales Manager
                       </span>
+                    )}
+                  </td>
+                  {/* Color & territory — only for users who act as sales managers */}
+                  <td className="px-5 py-3">
+                    {(u.role === 'manager' || (u.alsoManager && (u.role === 'admin' || u.role === 'head_of_sales'))) && u.name ? (
+                      <div className="flex items-center gap-2">
+                        <label
+                          className="relative h-6 w-6 shrink-0 cursor-pointer overflow-hidden rounded-lg border border-gray-200 transition-transform hover:scale-110"
+                          style={{ backgroundColor: managerColors[u.name] ?? '#94a3b8' }}
+                          title={`Chart color for ${u.name}`}
+                        >
+                          <input
+                            type="color"
+                            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                            value={managerColors[u.name] ?? '#94a3b8'}
+                            onChange={(e) => onManagerColorChange?.(u.name, e.target.value)}
+                          />
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Territory…"
+                          value={managerTerritories[u.name] ?? ''}
+                          onChange={(e) => onManagerTerritoryChange?.(u.name, e.target.value)}
+                          className="w-36 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-700 placeholder-gray-400 focus:border-blue-400 focus:bg-white focus:outline-none transition-colors"
+                        />
+                      </div>
+                    ) : (
+                      <span className="text-xs text-gray-300">—</span>
                     )}
                   </td>
                   <td className="px-5 py-3">

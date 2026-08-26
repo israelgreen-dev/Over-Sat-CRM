@@ -926,16 +926,9 @@ export default function Dashboard() {
         {safeTab === 'Settings' && (isHoS || isAdmin) && (
           <div className="space-y-10">
             <SettingsTab
-              managers={managers}
               products={products}
-              headOfSales={headOfSales}
-              partners={partners}
-              managerColors={managerColors}
-              managerTerritories={managerTerritories}
               probabilityDefaults={probabilityDefaults}
               onProductsChange={setProducts}
-              onManagerColorChange={handleManagerColorChange}
-              onManagerTerritoryChange={handleManagerTerritoryChange}
               onProbabilityDefaultsChange={setProbabilityDefaults}
               notificationSettings={notificationSettings}
               onNotificationSettingsChange={setNotificationSettings}
@@ -949,7 +942,13 @@ export default function Dashboard() {
                   <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-semibold text-purple-700">Admin only</span>
                 </p>
               </div>
-              <UsersTab currentUserId={profile?.id ?? ''} />
+              <UsersTab
+                currentUserId={profile?.id ?? ''}
+                managerColors={managerColors}
+                managerTerritories={managerTerritories}
+                onManagerColorChange={handleManagerColorChange}
+                onManagerTerritoryChange={handleManagerTerritoryChange}
+              />
             </div>
           </div>
         )}
