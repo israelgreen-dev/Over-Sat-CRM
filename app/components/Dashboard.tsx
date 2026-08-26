@@ -202,11 +202,43 @@ export default function Dashboard() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
+  // ── Team directory — single source of truth for people ────────────────────
+  // Managers / partners / head of sales derive from real user accounts
+  // (/api/team). The stored settings lists remain a fallback while the team
+  // loads (or if the fetch fails) so the UI never goes empty.
+  const [team, setTeam] = useState<{ name: string; role: string }[] | null>(null)
+
+  useEffect(() => {
+    if (!profile?.role) return
+    void (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session?.access_token) return
+        const res = await fetch('/api/team', { headers: { Authorization: `Bearer ${session.access_token}` } })
+        if (res.ok) setTeam(await res.json())
+      } catch { /* fallback to stored lists */ }
+    })()
+  }, [profile?.role, profile?.id])
+
   // ── Editable lists (Settings) ─────────────────────────────────────────────
-  const [managers, setManagers]       = useState<string[]>([...MANAGER_NAMES])
-  const [products, setProducts]       = useState<string[]>(DEFAULT_PRODUCTS)
-  const [headOfSales, setHeadOfSales] = useState<string>(MANAGER_NAMES[0] ?? '')
-  const [partners, setPartners]       = useState<string[]>([])
+  const [storedManagers, setStoredManagers] = useState<string[]>([...MANAGER_NAMES])
+  const [products, setProducts]             = useState<string[]>(DEFAULT_PRODUCTS)
+  const [storedHeadOfSales, setStoredHeadOfSales] = useState<string>(MANAGER_NAMES[0] ?? '')
+  const [storedPartners, setStoredPartners] = useState<string[]>([])
+
+  // Derived people lists (team wins; stored settings as fallback).
+  const managers = useMemo(
+    () => team ? team.filter((t) => t.role === 'manager').map((t) => t.name) : storedManagers,
+    [team, storedManagers],
+  )
+  const partners = useMemo(
+    () => team ? team.filter((t) => t.role === 'partner').map((t) => t.name) : storedPartners,
+    [team, storedPartners],
+  )
+  const headOfSales = useMemo(
+    () => team ? (team.find((t) => t.role === 'head_of_sales')?.name ?? storedHeadOfSales) : storedHeadOfSales,
+    [team, storedHeadOfSales],
+  )
   const [probabilityDefaults, setProbabilityDefaults] = useState<Record<string, number>>({ ...DEFAULT_PROBABILITY })
   // Explicit per-manager color picks from Settings; managers without a pick
   // fall back to the palette (by list position) in the managerColors memo.
@@ -265,10 +297,10 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadSettings().then((s) => {
-      if (s.managers)                setManagers(s.managers)
+      if (s.managers)                setStoredManagers(s.managers)
       if (s.products)                setProducts(s.products)
-      if (s.headOfSales !== undefined) setHeadOfSales(s.headOfSales)
-      if (s.partners)                setPartners(s.partners)
+      if (s.headOfSales !== undefined) setStoredHeadOfSales(s.headOfSales)
+      if (s.partners)                setStoredPartners(s.partners)
       if (s.targetsByYear)           setTargetsByYear(s.targetsByYear)
       else {
         // Legacy migration: v1 stored targets under a different key
@@ -495,18 +527,8 @@ export default function Dashboard() {
     setAddLeadOpen(true)
   }, [safeTab])
 
-  // Bug fix: previously called setManagerTargets(fn) where setManagerTargets
-  // only accepts Record<string,number>, so the function reference was stored as
-  // the value. Now we call setTargetsByYear directly with a functional updater.
-  const handleManagersChange = useCallback((newManagers: string[]) => {
-    setManagers(newManagers)
-    setTargetsByYear((prev) => ({
-      ...prev,
-      [selectedYear]: Object.fromEntries(
-        newManagers.map((n) => [n, (prev[selectedYear] ?? {})[n] ?? 0]),
-      ),
-    }))
-  }, [selectedYear])
+  // Managers/partners/HoS are managed in User Management; the lists here are
+  // derived from accounts, so there is no manual list editing anymore.
 
   // ── Auth gate ─────────────────────────────────────────────────────────────
   if (authLoading) {
@@ -894,10 +916,7 @@ export default function Dashboard() {
               managerColors={managerColors}
               managerTerritories={managerTerritories}
               probabilityDefaults={probabilityDefaults}
-              onManagersChange={handleManagersChange}
               onProductsChange={setProducts}
-              onHeadOfSalesChange={setHeadOfSales}
-              onPartnersChange={setPartners}
               onManagerColorChange={handleManagerColorChange}
               onManagerTerritoryChange={handleManagerTerritoryChange}
               onProbabilityDefaultsChange={setProbabilityDefaults}

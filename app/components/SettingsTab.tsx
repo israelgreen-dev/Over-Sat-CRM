@@ -22,35 +22,30 @@ export default function SettingsTab({
   managerColors,
   managerTerritories,
   probabilityDefaults,
-  onManagersChange,
   onProductsChange,
-  onHeadOfSalesChange,
-  onPartnersChange,
   onManagerColorChange,
   onManagerTerritoryChange,
   onProbabilityDefaultsChange,
   notificationSettings = DEFAULT_NOTIFICATION_CONFIG,
   onNotificationSettingsChange,
 }: {
+  /** Derived from user accounts (role = manager) — managed in Users below. */
   managers: string[]
   products: string[]
+  /** Derived from the user with the head_of_sales role. */
   headOfSales: string
+  /** Derived from user accounts (role = partner). */
   partners: string[]
   managerColors: Record<string, string>
   managerTerritories: Record<string, string>
   probabilityDefaults: Record<string, number>
-  onManagersChange: (v: string[]) => void
   onProductsChange: (v: string[]) => void
-  onHeadOfSalesChange: (v: string) => void
-  onPartnersChange: (v: string[]) => void
   onManagerColorChange: (name: string, color: string) => void
   onManagerTerritoryChange: (name: string, territory: string) => void
   onProbabilityDefaultsChange: (v: Record<string, number>) => void
   notificationSettings?: NotificationConfig
   onNotificationSettingsChange?: (v: NotificationConfig) => void
 }) {
-  const [hosEditing, setHosEditing] = useState(false)
-  const [hosVal, setHosVal]         = useState(headOfSales)
 
   // Recipient emails per role — read-only, sourced from the Users section.
   const [roleEmails, setRoleEmails] = useState<Record<NotifyRole, string[]>>({ admin: [], head_of_sales: [] })
@@ -70,60 +65,100 @@ export default function SettingsTab({
     })()
   }, [])
 
-  function commitHos() {
-    const v = hosVal.trim()
-    onHeadOfSalesChange(v)
-    setHosEditing(false)
-  }
-
   return (
     <div className="space-y-8">
       <div>
         <h2 className="text-base font-bold text-gray-900">Settings</h2>
         <p className="mt-0.5 text-sm text-gray-400">
-          Manage lists and roles. Targets are managed in the Targets tab.
+          People are managed in User Management below — the team here derives from those accounts.
+          Targets are managed in the Targets tab.
         </p>
       </div>
 
-      {/* ── Head of Sales ───────────────────────────────────────────────────── */}
+      {/* ── Sales Team — derived from user accounts ─────────────────────────── */}
       <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
         <div className="mb-1 flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full bg-slate-600" />
-          <h3 className="text-sm font-bold text-gray-900">Head of Sales</h3>
+          <span className="h-2.5 w-2.5 rounded-full bg-blue-500" />
+          <h3 className="text-sm font-bold text-gray-900">Sales Team</h3>
         </div>
-        <p className="mb-3 text-xs text-gray-400">
-          Sees all opportunity data and aggregated analytics. Not counted as a sales team member.
+        <p className="mb-4 text-xs text-gray-400">
+          Derived automatically from user accounts and their roles — add, rename or remove people in{' '}
+          <span className="font-semibold text-gray-500">User Management</span> below.
+          Pick each manager&apos;s color (used in all charts) and territory here.
         </p>
-        <div className="flex items-center gap-2 rounded-xl bg-gray-50 px-3 py-2">
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-600 text-xs font-bold text-white">1</span>
-          {hosEditing ? (
-            <>
-              <input
-                autoFocus
-                className="flex-1 rounded-lg border border-blue-300 bg-white px-2 py-1 text-sm text-gray-900 focus:outline-none"
-                value={hosVal}
-                onChange={(e) => setHosVal(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') commitHos(); if (e.key === 'Escape') setHosEditing(false) }}
-              />
-              <button onClick={commitHos} className="rounded-lg p-1 text-green-500 hover:bg-green-50 transition-colors" title="Save">
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-              </button>
-              <button onClick={() => setHosEditing(false)} className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 transition-colors" title="Cancel">
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-            </>
-          ) : (
-            <>
-              <span className="flex-1 text-sm font-medium text-gray-900">{headOfSales || <span className="text-gray-400">Not set</span>}</span>
-              <button onClick={() => { setHosVal(headOfSales); setHosEditing(true) }} className="rounded-lg p-1 text-gray-300 hover:bg-blue-50 hover:text-blue-500 transition-colors" title="Edit">
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 012.828 2.828L11.828 15.828a2 2 0 01-1.414.586H8v-2.414a2 2 0 01.586-1.414z" /></svg>
-              </button>
-              <button onClick={() => { onHeadOfSalesChange(''); setHosVal('') }} className="rounded-lg p-1 text-gray-300 hover:bg-red-50 hover:text-red-500 transition-colors" title="Clear">
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-            </>
-          )}
+
+        {/* Head of Sales */}
+        <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-400">Head of Sales</p>
+        <div className="mb-4 flex items-center gap-2 rounded-xl bg-gray-50 px-3 py-2">
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-600 text-xs font-bold text-white">
+            {headOfSales ? headOfSales[0] : '—'}
+          </span>
+          <span className="text-sm font-medium text-gray-900">{headOfSales || <span className="text-gray-400">No Head of Sales account yet</span>}</span>
         </div>
+
+        {/* Managers with color + territory */}
+        <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-400">Sales Managers</p>
+        <ul className="mb-4 space-y-1.5">
+          {managers.length === 0 && (
+            <li className="rounded-xl bg-gray-50 px-3 py-3 text-center text-xs text-gray-400">
+              No Sales Manager accounts yet — create them in User Management below.
+            </li>
+          )}
+          {managers.map((name) => (
+            <li key={name} className="rounded-xl bg-gray-50 px-3 py-2">
+              <div className="flex items-center gap-2">
+                <span
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+                  style={{ backgroundColor: managerColors[name] ?? '#94a3b8' }}
+                >
+                  {name[0]}
+                </span>
+                <span className="flex-1 text-sm font-medium text-gray-900">{name}</span>
+                <label
+                  className="relative h-6 w-6 shrink-0 cursor-pointer overflow-hidden rounded-lg border border-gray-200 transition-transform hover:scale-110"
+                  style={{ backgroundColor: managerColors[name] ?? '#94a3b8' }}
+                  title={`Change color for ${name}`}
+                >
+                  <input
+                    type="color"
+                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                    value={managerColors[name] ?? '#94a3b8'}
+                    onChange={(e) => onManagerColorChange(name, e.target.value)}
+                  />
+                </label>
+              </div>
+              <div className="mt-2 flex items-center gap-2 pl-8">
+                <svg className="h-3.5 w-3.5 shrink-0 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                <input
+                  type="text"
+                  placeholder="Territory (e.g. EMEA, West Coast)…"
+                  value={managerTerritories[name] ?? ''}
+                  onChange={(e) => onManagerTerritoryChange(name, e.target.value)}
+                  className="flex-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 placeholder-gray-400 focus:border-blue-400 focus:outline-none transition-colors"
+                />
+              </div>
+            </li>
+          ))}
+        </ul>
+
+        {/* Partners */}
+        <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-400">Partners</p>
+        {partners.length === 0 ? (
+          <p className="rounded-xl bg-gray-50 px-3 py-3 text-center text-xs text-gray-400">
+            No Partner accounts yet — create them in User Management below.
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-1.5">
+            {partners.map((name) => (
+              <span key={name} className="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+                {name}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ── Probability defaults ───────────────────────────────────────────── */}
@@ -186,20 +221,8 @@ export default function SettingsTab({
         </div>
       </div>
 
-      {/* ── Lists ──────────────────────────────────────────────────────────── */}
+      {/* ── Products ───────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-        <ListEditor
-          title="Sales Managers"
-          description="Names available in the Owner field on all opportunities. Pick a color for each manager — it is used in all charts and analytics. Reorder with the arrows or sort A–Z."
-          items={managers}
-          onChange={onManagersChange}
-          placeholder="e.g. David"
-          accent="#3b82f6"
-          itemColors={managerColors}
-          onItemColorChange={onManagerColorChange}
-          itemTerritories={managerTerritories}
-          onItemTerritoryChange={onManagerTerritoryChange}
-        />
         <ListEditor
           title="Products"
           description="Values shown in the Product dropdown on opportunity forms."
@@ -207,14 +230,6 @@ export default function SettingsTab({
           onChange={onProductsChange}
           placeholder="e.g. Falcon9"
           accent="#8b5cf6"
-        />
-        <ListEditor
-          title="Partners"
-          description="Partners can view all opportunity data and analytics but cannot access Settings."
-          items={partners}
-          onChange={onPartnersChange}
-          placeholder="e.g. Acme Corp"
-          accent="#10b981"
         />
       </div>
     </div>
