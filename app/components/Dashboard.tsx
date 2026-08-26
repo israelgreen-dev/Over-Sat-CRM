@@ -395,17 +395,25 @@ export default function Dashboard() {
     [selectedYear],
   )
 
-  // ── All unique managers (HoS excluded — separate role) ────────────────────
+  // Dual role: when the Head of Sales is flagged "also a sales manager"
+  // they stay IN the manager lists (own pipeline, targets, analytics).
+  const hosIsAlsoManager = useMemo(
+    () => !!team?.find((t) => t.role === 'head_of_sales')?.alsoManager,
+    [team],
+  )
+
+  // ── All unique managers (HoS excluded unless dual-role) ───────────────────
   const allManagers = useMemo(() => {
     const managersLower = managers.map((n) => n.toLowerCase())
+    const excludeHos = (name: string) =>
+      hosIsAlsoManager || name.toLowerCase() !== headOfSales.toLowerCase()
     const extra = Array.from(new Set(
       liveOpps
         .map((o) => (o.owner as string) ?? '')
-        .filter((owner) => owner && !managersLower.includes(owner.toLowerCase()) && owner.toLowerCase() !== headOfSales.toLowerCase()),
+        .filter((owner) => owner && !managersLower.includes(owner.toLowerCase()) && excludeHos(owner)),
     ))
-    // Exclude HoS from the sales team list
-    return [...managers.filter((m) => m.toLowerCase() !== headOfSales.toLowerCase()), ...extra]
-  }, [managers, liveOpps, headOfSales])
+    return [...managers.filter(excludeHos), ...extra]
+  }, [managers, liveOpps, headOfSales, hosIsAlsoManager])
 
   // ── Available years ───────────────────────────────────────────────────────
   const availableYears = useMemo(() => {
@@ -424,7 +432,10 @@ export default function Dashboard() {
   }, [liveOpps])
 
   // ── Role-derived flags ────────────────────────────────────────────────────
-  const isHoS        = viewAs === HEAD_OF_SALES || viewAs === headOfSales
+  // Sentinel only: selecting the HoS by NAME in the persona switcher (possible
+  // when they're dual-role and appear among the managers) must give the
+  // scoped manager view, not full access.
+  const isHoS        = viewAs === HEAD_OF_SALES
   const isPartner    = partners.includes(viewAs)
   const isFullAccess = isHoS || isPartner
 
@@ -885,7 +896,7 @@ export default function Dashboard() {
             managers={
               isAdmin && !isHoS
                 ? managers.filter((m) => m.toLowerCase() === viewAs.toLowerCase())
-                : managers.filter((m) => m.toLowerCase() !== headOfSales.toLowerCase())
+                : managers.filter((m) => hosIsAlsoManager || m.toLowerCase() !== headOfSales.toLowerCase())
             }
             managerTargets={managerTargets}
             onManagerTargetsChange={setManagerTargets}
