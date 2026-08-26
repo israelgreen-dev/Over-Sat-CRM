@@ -569,12 +569,26 @@ export default function Dashboard() {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-slate-900 p-8">
         <p className="text-sm text-red-400">Failed to load opportunities: {oppsError}</p>
-        <button
-          onClick={() => window.location.reload()}
-          className="rounded-lg bg-slate-700 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-600 transition-colors"
-        >
-          Retry
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => window.location.reload()}
+            className="rounded-lg bg-slate-700 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-600 transition-colors"
+          >
+            Retry
+          </button>
+          {/* Token-level failures (e.g. "JWT issued at future") need a fresh
+              session — a plain retry reuses the same bad token. */}
+          <button
+            onClick={async () => { await handleLogout(); window.location.reload() }}
+            className="rounded-lg border border-slate-600 px-4 py-2 text-sm font-semibold text-slate-300 hover:bg-slate-800 transition-colors"
+          >
+            Sign out &amp; sign in again
+          </button>
+        </div>
+        <p className="max-w-md text-center text-xs text-slate-500">
+          If retrying doesn&apos;t help, signing out clears the session token and usually resolves
+          token-related errors.
+        </p>
       </div>
     )
   }
