@@ -225,6 +225,15 @@ export default function UsersTab({
   const [noServiceKey, setNoServiceKey] = useState(false)
 
   const [form, setForm] = useState({ email: '', password: '', name: '', role: 'manager' as User['role'] })
+  // Direction the next click of the sort button will apply (toggles each click).
+  const [sortAsc, setSortAsc] = useState(true)
+
+  function toggleSort() {
+    setUsers((prev) => [...prev].sort((a, b) => sortAsc
+      ? (a.name || '').localeCompare(b.name || '')
+      : (b.name || '').localeCompare(a.name || '')))
+    setSortAsc((v) => !v)
+  }
   const [resetUserId, setResetUserId]   = useState<string | null>(null)
   const [sentResetIds, setSentResetIds] = useState<Set<string>>(new Set())
   const [sentInviteIds, setSentInviteIds] = useState<Set<string>>(new Set())
@@ -364,12 +373,31 @@ export default function UsersTab({
           <h2 className="text-base font-bold text-gray-900">Users</h2>
           <p className="mt-0.5 text-sm text-gray-400">Manage CRM user accounts and roles.</p>
         </div>
-        <button
-          onClick={() => { setShowForm(true); setError(null) }}
-          className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 transition-colors"
-        >
-          + Add User
-        </button>
+        <div className="flex items-center gap-2">
+          {users.length > 1 && (
+            <button
+              onClick={toggleSort}
+              title={sortAsc ? 'Sort A–Z' : 'Sort Z–A'}
+              className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+            >
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                {sortAsc
+                  ? <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h13M3 8h9M3 12h5m4 6l3 3m0 0l3-3m-3 3V4" />
+                  : <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h5M3 8h9M3 12h13m4-8l3-3m0 0l3 3m-3-3v18" />}
+              </svg>
+              {sortAsc ? 'A–Z' : 'Z–A'}
+            </button>
+          )}
+          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">
+            {users.length}
+          </span>
+          <button
+            onClick={() => { setShowForm(true); setError(null) }}
+            className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 transition-colors"
+          >
+            + Add User
+          </button>
+        </div>
       </div>
 
       {/* Role permissions legend */}
