@@ -678,27 +678,31 @@ export default function UsersTab({
                   <td className="px-5 py-3">
                     {editingId !== u.id && resetUserId !== u.id && (
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        {/* Eye icon (admins only): reveal the last admin-set password inline. */}
+                        <button onClick={() => setEditingId(u.id)} className="rounded-lg px-2.5 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50">Edit</button>
+
+                        {/* Invite button */}
+                        {sentInviteIds.has(u.id) ? (
+                          <span className="rounded-lg px-2.5 py-1 text-xs font-medium text-emerald-600 bg-emerald-50">Invite sent ✓</span>
+                        ) : (
+                          <button
+                            onClick={() => setInviteTarget({ name: u.name, email: u.email, role: u.role as User['role'] })}
+                            className="rounded-lg px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 border border-slate-200"
+                          >
+                            ✉ Send Invite
+                          </button>
+                        )}
+
+                        {/* Reset password */}
+                        {sentResetIds.has(u.id) ? (
+                          <span className="rounded-lg px-2.5 py-1 text-xs font-medium text-emerald-600 bg-emerald-50">Reset sent ✓</span>
+                        ) : (
+                          <button onClick={() => setResetUserId(u.id)} className="rounded-lg px-2.5 py-1 text-xs font-medium text-amber-600 hover:bg-amber-50">Reset pw</button>
+                        )}
+
+                        {/* Eye icon (admins only, left of the trash icon):
+                            reveal the last admin-set password inline. */}
                         {canViewPasswords && (
                           <>
-                            <button
-                              onClick={() => toggleReveal(u.id)}
-                              title={u.setPassword
-                                ? (revealedIds.has(u.id) ? 'Hide password' : 'View password')
-                                : 'View password'}
-                              className={`flex h-7 w-7 items-center justify-center rounded-lg transition-colors ${revealedIds.has(u.id) ? 'bg-gray-100 text-gray-600' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`}
-                            >
-                              {revealedIds.has(u.id) ? (
-                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                                </svg>
-                              ) : (
-                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                </svg>
-                              )}
-                            </button>
                             {revealedIds.has(u.id) && (
                               u.setPassword ? (
                                 <span className="flex items-center gap-1">
@@ -724,29 +728,24 @@ export default function UsersTab({
                                 </span>
                               )
                             )}
+                            <button
+                              onClick={() => toggleReveal(u.id)}
+                              title={revealedIds.has(u.id) ? 'Hide password' : 'View password'}
+                              className={`flex h-7 w-7 items-center justify-center rounded-lg transition-colors ${revealedIds.has(u.id) ? 'bg-gray-100 text-gray-600' : 'text-gray-300 hover:bg-gray-100 hover:text-gray-600'}`}
+                            >
+                              {revealedIds.has(u.id) ? (
+                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                                </svg>
+                              ) : (
+                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                </svg>
+                              )}
+                            </button>
                           </>
                         )}
-                        <button onClick={() => setEditingId(u.id)} className="rounded-lg px-2.5 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50">Edit</button>
-
-                        {/* Invite button */}
-                        {sentInviteIds.has(u.id) ? (
-                          <span className="rounded-lg px-2.5 py-1 text-xs font-medium text-emerald-600 bg-emerald-50">Invite sent ✓</span>
-                        ) : (
-                          <button
-                            onClick={() => setInviteTarget({ name: u.name, email: u.email, role: u.role as User['role'] })}
-                            className="rounded-lg px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 border border-slate-200"
-                          >
-                            ✉ Send Invite
-                          </button>
-                        )}
-
-                        {/* Reset password */}
-                        {sentResetIds.has(u.id) ? (
-                          <span className="rounded-lg px-2.5 py-1 text-xs font-medium text-emerald-600 bg-emerald-50">Reset sent ✓</span>
-                        ) : (
-                          <button onClick={() => setResetUserId(u.id)} className="rounded-lg px-2.5 py-1 text-xs font-medium text-amber-600 hover:bg-amber-50">Reset pw</button>
-                        )}
-
                         {u.id !== currentUserId && (
                           <button onClick={() => deleteUser(u.id)} disabled={busy} title="Delete user" className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-300 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50">
                             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
