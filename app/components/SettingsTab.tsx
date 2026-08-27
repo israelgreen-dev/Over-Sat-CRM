@@ -6,6 +6,7 @@ import {
   NOTIFICATION_EVENTS, EVENT_LABELS, NOTIFY_ROLES, NOTIFY_ROLE_LABELS,
   DEFAULT_NOTIFICATION_CONFIG,
   type NotificationConfig, type NotificationSettings, type NotificationMode, type NotifyRole,
+  type NotificationEvent,
 } from '@/lib/notification-types'
 
 const PROBABILITY_STAGES = ['Discovery', 'Proposal', 'Negotiation', 'Win', 'Loss']
@@ -39,7 +40,7 @@ export default function SettingsTab({
         if (!session?.access_token) return
         const res = await fetch('/api/admin/users', { headers: { Authorization: `Bearer ${session.access_token}` } })
         if (!res.ok) return
-        const users = await res.json() as { email: string; role: string }[]
+        const users = ((await res.json())?.users ?? []) as { email: string; role: string }[]
         setRoleEmails({
           admin:         users.filter((u) => u.role === 'admin').map((u) => u.email).filter(Boolean),
           head_of_sales: users.filter((u) => u.role === 'head_of_sales').map((u) => u.email).filter(Boolean),
@@ -192,23 +193,34 @@ function RoleNotificationPanel({
           ))}
         </div>
 
-        {/* Event toggles */}
+        {/* Event toggles — grouped by object (Lead / Opportunity) */}
         <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-400">Notify about</p>
-        <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-          {NOTIFICATION_EVENTS.map((ev) => {
-            const on = settings.events?.[ev] !== false
-            return (
-              <label key={ev} className="flex cursor-pointer items-center gap-2 rounded-lg bg-white px-2.5 py-1.5 border border-gray-100">
-                <input
-                  type="checkbox"
-                  checked={on}
-                  onChange={() => onChange({ ...settings, events: { ...settings.events, [ev]: !on } })}
-                  className="h-4 w-4 rounded border-gray-300 text-rose-500 focus:ring-rose-400"
-                />
-                <span className="text-xs text-gray-700">{EVENT_LABELS[ev]}</span>
-              </label>
-            )
-          })}
+        <div className="space-y-2">
+          {([
+            ['Lead',        ['lead_created', 'lead_updated', 'lead_deleted']],
+            ['Opportunity', ['opp_created',  'opp_updated',  'opp_deleted']],
+          ] as [string, NotificationEvent[]][]).map(([group, events]) => (
+            <div key={group} className="rounded-lg border border-gray-100 bg-white p-2.5">
+              <p className="mb-1.5 text-xs font-bold text-gray-700">{group}</p>
+              <div className="grid grid-cols-3 gap-1.5">
+                {events.map((ev) => {
+                  const on = settings.events?.[ev] !== false
+                  const action = ev.endsWith('_created') ? 'Creation' : ev.endsWith('_updated') ? 'Update' : 'Deletion'
+                  return (
+                    <label key={ev} title={EVENT_LABELS[ev]} className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-gray-50 px-2 py-1.5 border border-gray-100">
+                      <input
+                        type="checkbox"
+                        checked={on}
+                        onChange={() => onChange({ ...settings, events: { ...settings.events, [ev]: !on } })}
+                        className="h-4 w-4 rounded border-gray-300 text-rose-500 focus:ring-rose-400"
+                      />
+                      <span className="text-xs text-gray-700">{action}</span>
+                    </label>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
         </div>
 
         {/* Recipients — read-only, sourced from the Users section */}
