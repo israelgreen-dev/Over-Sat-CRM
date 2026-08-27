@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import {
-  NOTIFICATION_EVENTS, EVENT_LABELS, NOTIFY_ROLES, NOTIFY_ROLE_LABELS,
+  EVENT_LABELS, NOTIFY_ROLES, NOTIFY_ROLE_LABELS,
   DEFAULT_NOTIFICATION_CONFIG,
   type NotificationConfig, type NotificationSettings, type NotificationMode, type NotifyRole,
   type NotificationEvent,

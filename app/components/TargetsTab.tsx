@@ -181,7 +181,7 @@ export default function TargetsTab({
           <h2 className="text-base font-bold text-gray-900">Targets — {selectedYear}</h2>
           <p className="mt-0.5 text-sm text-gray-400">
             Overall Target: <span className="font-semibold text-gray-700">{fmt(overallTarget)}</span>
-            &nbsp;·&nbsp; Each manager's target is derived from their product forecast.
+            &nbsp;·&nbsp; Each manager&apos;s target is derived from their product forecast.
           </p>
         </div>
         {otherYears.length > 0 && !readOnly && (
@@ -325,7 +325,7 @@ export default function TargetsTab({
                   {rows.length === 0 && (
                     <tr>
                       <td colSpan={8} className="px-4 py-5 text-center text-xs text-gray-400">
-                        No products yet — click "+ Add Product" below.
+                        No products yet — click &quot;+ Add Product&quot; below.
                       </td>
                     </tr>
                   )}

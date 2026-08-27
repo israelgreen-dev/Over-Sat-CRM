@@ -8,9 +8,9 @@
 //      discovers the token is fake when it validates or refreshes it.
 //
 // Data strategy
-// The Next.js server component (app/page.tsx) fetches opportunities server-side
-// using real credentials from .env.local — page.route() cannot intercept those
-// Node.js-side fetches. Tests therefore work with whatever the real DB returns
+// app/page.tsx is a static shell; all data fetching happens client-side inside
+// Dashboard after login (so RLS always applies). Those browser-side Supabase
+// requests hit the real DB, so tests work with whatever it returns
 // (zero or more rows). For Test 3, which requires a controllable row to edit,
 // we drive the "+ New Opportunity" UI flow and intercept the browser-side
 // Supabase INSERT with a deterministic stub response.

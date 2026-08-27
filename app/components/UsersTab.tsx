@@ -131,7 +131,7 @@ function InvitePreview({ name, email, role }: { name: string; email: string; rol
         </div>
         <span className="flex-1 truncate">
           <strong>To:</strong> {email || 'user@example.com'} &nbsp;·&nbsp;
-          <strong>Subject:</strong> You've been invited to Over-Sat CRM
+          <strong>Subject:</strong> You&apos;ve been invited to Over-Sat CRM
         </span>
       </div>
 
@@ -152,7 +152,7 @@ function InvitePreview({ name, email, role }: { name: string; email: string; rol
           Hi <strong>{name || 'there'}</strong>,
         </p>
         <p className="mb-4 text-gray-600 leading-relaxed">
-          You've been invited to join <strong>Over-Sat CRM</strong> as a{' '}
+          You&apos;ve been invited to join <strong>Over-Sat CRM</strong> as a{' '}
           <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${ROLE_COLORS[role]}`}>
             {ROLE_LABELS[role]}
           </span>.
@@ -568,11 +568,11 @@ export default function UsersTab({
             <div>
               <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Password</label>
               <PasswordField value={form.password} onChange={(password) => setForm((f) => ({ ...f, password }))} />
-              <p className="mt-1 text-[11px] text-gray-400">Passwords are stored encrypted and can't be viewed later — copy it now if you plan to share it.</p>
+              <p className="mt-1 text-[11px] text-gray-400">Passwords are stored encrypted and can&apos;t be viewed later — copy it now if you plan to share it.</p>
             </div>
           </div>
           <div className="mt-4 flex items-center justify-between">
-            <p className="text-xs text-gray-400">After creating, you'll be prompted to send an invitation email.</p>
+            <p className="text-xs text-gray-400">After creating, you&apos;ll be prompted to send an invitation email.</p>
             <div className="flex gap-2">
               <button onClick={() => { setShowForm(false); setError(null) }} className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
               <button
@@ -809,7 +809,7 @@ function EditRow({ user, onSave, onCancel, busy }: { user: User; onSave: (u: { n
       {showPw && (
         <div className="w-96 max-w-full">
           <PasswordField value={password} onChange={setPassword} placeholder="New password (min. 8 chars)" />
-          <p className="mt-1 text-[11px] text-gray-400">Current passwords are stored encrypted and can't be viewed — set a new one here and copy it to share.</p>
+          <p className="mt-1 text-[11px] text-gray-400">Current passwords are stored encrypted and can&apos;t be viewed — set a new one here and copy it to share.</p>
         </div>
       )}
       {dualEligible && (

@@ -47,3 +47,6 @@ playwright-report/
 
 # local scratch (not part of the app)
 crm-beginner/
+
+# Claude Code local permissions (may contain command history)
+.claude/settings.local.json
