@@ -206,7 +206,8 @@ function InviteModal({
 }) {
   const [sending, setSending] = useState(false)
   const [error, setError]     = useState<string | null>(null)
-  const [sent, setSent]       = useState(false)
+  // null = not sent yet; otherwise the confirmation message to show.
+  const [sent, setSent]       = useState<string | null>(null)
 
   async function sendInvite() {
     setSending(true); setError(null)
@@ -222,13 +223,15 @@ function InviteModal({
     const json = await res.json()
     setSending(false)
     if (!res.ok) { setError(json.error); return }
-    setSent(true)
+    setSent(json.existing
+      ? 'This user already has an account — a set-password link was emailed instead.'
+      : 'Invitation sent!')
     // Capture callbacks immediately — by the time the timeout fires the
     // parent may have already set inviteTarget to null (modal dismissed),
     // which would cause onSent to read inviteTarget.email off null.
     const _onSent = onSent
     const _onClose = onClose
-    setTimeout(() => { _onSent(); _onClose() }, 1500)
+    setTimeout(() => { _onSent(); _onClose() }, 2500)
   }
 
   return (
@@ -259,10 +262,10 @@ function InviteModal({
           )}
           {sent ? (
             <div className="flex items-center gap-2 text-sm font-semibold text-emerald-600">
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <svg className="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
-              Invitation sent!
+              {sent}
             </div>
           ) : (
             <div className="flex items-center justify-end gap-2">

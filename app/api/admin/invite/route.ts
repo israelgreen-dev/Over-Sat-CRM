@@ -39,7 +39,22 @@ export async function POST(req: NextRequest) {
     data: { name },
   })
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  if (error) {
+    // inviteUserByEmail only works for brand-new accounts. For a user that
+    // already exists (e.g. created via Add User), send a set-password
+    // (recovery) link instead — same outcome: click, set password, log in.
+    // The existing account's role/metadata are left untouched.
+    if (/already.*registered/i.test(error.message)) {
+      const anon = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      )
+      const { error: resetError } = await anon.auth.resetPasswordForEmail(email)
+      if (resetError) return NextResponse.json({ error: resetError.message }, { status: 400 })
+      return NextResponse.json({ success: true, existing: true })
+    }
+    return NextResponse.json({ error: error.message }, { status: 400 })
+  }
 
   // Name + role live in app_metadata (server-only) so users can't self-edit
   // them — RLS matches deal/lead ownership by app_metadata name.
