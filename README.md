@@ -139,6 +139,7 @@ Run in order in the Supabase SQL editor. All are idempotent (safe to re-run).
 | 013 | Website/source/priority on opportunities |
 | 014 | **Security:** names → `app_metadata`, ownership RLS rewrite |
 | 015 | Email notifications: settings column + lead audit trail |
+| 016 | Admin-set password vault (service-role-only table; admin-only viewing) |
 
 ## Deploying
 

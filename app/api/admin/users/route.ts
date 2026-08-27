@@ -22,6 +22,17 @@ function adminClient() {
 // Roles are stored in app_metadata (server-only) — see lib/api-auth.ts.
 const VALID_ROLES = ['admin', 'head_of_sales', 'manager', 'partner'] as const
 
+type AdminClient = NonNullable<ReturnType<typeof adminClient>>
+
+// Record an admin-set password so admins can view it later (migration 016).
+// The table is RLS-locked (no policies) — only the service role touches it.
+// Best-effort: if the migration hasn't run yet, the feature stays dormant.
+async function recordSetPassword(sb: AdminClient, userId: string, password: string, setBy: string) {
+  try {
+    await sb.from('admin_set_passwords').upsert({ user_id: userId, password, set_by: setBy, set_at: new Date().toISOString() })
+  } catch { /* table missing or transient error — viewing simply stays unavailable */ }
+}
+
 function isValidRole(role: unknown): role is (typeof VALID_ROLES)[number] {
   return typeof role === 'string' && (VALID_ROLES as readonly string[]).includes(role)
 }
@@ -39,18 +50,32 @@ export async function GET(req: NextRequest) {
   const { data, error } = await supabaseAdmin.auth.admin.listUsers()
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 
-  const users = data.users.map((u) => ({
-    id:         u.id,
-    email:      u.email,
-    // app_metadata is authoritative; user_metadata only as legacy fallback
-    name:       u.app_metadata?.name ?? u.user_metadata?.name ?? '',
-    role:       u.app_metadata?.role ?? u.user_metadata?.role ?? '',
-    // Dual role: an admin/HoS who also works a pipeline as a sales manager.
-    alsoManager: !!u.app_metadata?.also_manager,
-    created_at: u.created_at,
-  }))
+  // Admin-set passwords are visible to role=admin ONLY (not head_of_sales).
+  const isAdmin = user.role === 'admin'
+  const setPasswords = new Map<string, { password: string; set_at: string }>()
+  if (isAdmin) {
+    try {
+      const { data: rows } = await supabaseAdmin.from('admin_set_passwords').select('user_id, password, set_at')
+      for (const r of rows ?? []) setPasswords.set(r.user_id, r)
+    } catch { /* migration 016 not run yet — feature dormant */ }
+  }
 
-  return NextResponse.json({ users })
+  const users = data.users.map((u) => {
+    const sp = setPasswords.get(u.id)
+    return {
+      id:         u.id,
+      email:      u.email,
+      // app_metadata is authoritative; user_metadata only as legacy fallback
+      name:       u.app_metadata?.name ?? u.user_metadata?.name ?? '',
+      role:       u.app_metadata?.role ?? u.user_metadata?.role ?? '',
+      // Dual role: an admin/HoS who also works a pipeline as a sales manager.
+      alsoManager: !!u.app_metadata?.also_manager,
+      created_at: u.created_at,
+      ...(isAdmin && sp ? { setPassword: sp.password, setPasswordAt: sp.set_at } : {}),
+    }
+  })
+
+  return NextResponse.json({ users, canViewPasswords: isAdmin })
 }
 
 // POST /api/admin/users — create a new user
@@ -85,6 +110,7 @@ export async function POST(req: NextRequest) {
   })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  await recordSetPassword(supabaseAdmin, data.user.id, password, user.email)
   return NextResponse.json({ success: true, user: { id: data.user.id, email, name, role } })
 }
 
@@ -108,6 +134,7 @@ export async function DELETE(req: NextRequest) {
 
   const { error } = await supabaseAdmin.auth.admin.deleteUser(userId)
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  try { await supabaseAdmin.from('admin_set_passwords').delete().eq('user_id', userId) } catch { /* best-effort cleanup */ }
   return NextResponse.json({ success: true })
 }
 
@@ -167,5 +194,6 @@ export async function PATCH(req: NextRequest) {
 
   const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, updates)
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  if (password) await recordSetPassword(supabaseAdmin, userId, password, user.email)
   return NextResponse.json({ success: true })
 }
