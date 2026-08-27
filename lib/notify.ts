@@ -18,7 +18,9 @@ export function notifyEvent(
 ): void {
   void (async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession()
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
       if (!session?.access_token) return
 
       const clean: Record<string, string> = {}
@@ -35,6 +37,8 @@ export function notifyEvent(
         },
         body: JSON.stringify({ event, name, details: clean }),
       })
-    } catch { /* notification failures must never surface to the user */ }
+    } catch {
+      /* notification failures must never surface to the user */
+    }
   })()
 }

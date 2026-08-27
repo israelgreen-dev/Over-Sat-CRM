@@ -12,10 +12,12 @@ import { rateLimit, callerIp } from '@/lib/rate-limit'
 import { serviceClient } from '@/lib/recipients'
 
 export async function GET(req: NextRequest) {
-  if (!rateLimit(callerIp(req), 60)) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+  if (!rateLimit(callerIp(req), 60))
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
 
   const { user, error: authError } = await requireUser(req)
-  if (authError || !user) return NextResponse.json({ error: authError ?? 'Unauthorized' }, { status: 401 })
+  if (authError || !user)
+    return NextResponse.json({ error: authError ?? 'Unauthorized' }, { status: 401 })
 
   const sb = serviceClient()
   const { data, error } = await sb.auth.admin.listUsers({ page: 1, perPage: 1000 })

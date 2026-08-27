@@ -1,17 +1,24 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { type Opportunity, Modal, AddOpportunityModal, effectiveProbability, weightedValue, getProductLines } from './OpportunitiesTable'
+import {
+  type Opportunity,
+  Modal,
+  AddOpportunityModal,
+  effectiveProbability,
+  weightedValue,
+  getProductLines,
+} from './OpportunitiesTable'
 import { fmtUSD } from '@/lib/currency'
 import { supabase } from '@/lib/supabase'
 import { notifyEvent } from '@/lib/notify'
 
 const STAGE_COLORS: Record<string, string> = {
-  Discovery:   'bg-blue-100 text-blue-700',
-  Proposal:    'bg-yellow-100 text-yellow-700',
+  Discovery: 'bg-blue-100 text-blue-700',
+  Proposal: 'bg-yellow-100 text-yellow-700',
   Negotiation: 'bg-orange-100 text-orange-700',
-  Win:         'bg-green-100 text-green-700',
-  Loss:        'bg-red-100 text-red-700',
+  Win: 'bg-green-100 text-green-700',
+  Loss: 'bg-red-100 text-red-700',
 }
 
 // Days an open deal has been sitting in its current stage (migration 009
@@ -39,21 +46,25 @@ function isOverdue(o: Opportunity): boolean {
 type SortDir = 'asc' | 'desc'
 
 const COLUMNS: { label: string; field: string; numeric?: boolean }[] = [
-  { label: 'Opportunity',    field: 'name' },
-  { label: 'Account',        field: 'customer_name' },
-  { label: 'Sales Manager',  field: 'owner' },
-  { label: 'Product',        field: 'product' },
-  { label: 'Value',          field: 'value',       numeric: true },
-  { label: 'Prob %',         field: 'probability', numeric: true },
-  { label: 'Weighted Value', field: '_weighted',   numeric: true },
-  { label: 'Stage',          field: 'stage' },
-  { label: 'Close Date',     field: 'close_date' },
-  { label: 'Status',         field: 'status' },
-  { label: 'Updated',        field: 'updated_at' },
+  { label: 'Opportunity', field: 'name' },
+  { label: 'Account', field: 'customer_name' },
+  { label: 'Sales Manager', field: 'owner' },
+  { label: 'Product', field: 'product' },
+  { label: 'Value', field: 'value', numeric: true },
+  { label: 'Prob %', field: 'probability', numeric: true },
+  { label: 'Weighted Value', field: '_weighted', numeric: true },
+  { label: 'Stage', field: 'stage' },
+  { label: 'Close Date', field: 'close_date' },
+  { label: 'Status', field: 'status' },
+  { label: 'Updated', field: 'updated_at' },
 ]
 
 // Compact display for the Updated column ("12 Jun 25").
-const updatedFmt = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })
+const updatedFmt = new Intl.DateTimeFormat('en-GB', {
+  day: '2-digit',
+  month: 'short',
+  year: '2-digit',
+})
 function fmtUpdated(ts: unknown): string {
   if (!ts) return '—'
   const d = new Date(String(ts))
@@ -61,7 +72,11 @@ function fmtUpdated(ts: unknown): string {
 }
 
 function FilterSelect({
-  label, value, onChange, placeholder, options,
+  label,
+  value,
+  onChange,
+  placeholder,
+  options,
 }: {
   label: string
   value: string
@@ -71,7 +86,9 @@ function FilterSelect({
 }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">{label}</span>
+      <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+        {label}
+      </span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -79,14 +96,21 @@ function FilterSelect({
       >
         <option value="">{placeholder}</option>
         {options.map((o) => (
-          <option key={o} value={o}>{o}</option>
+          <option key={o} value={o}>
+            {o}
+          </option>
         ))}
       </select>
     </div>
   )
 }
 
-function sortRows(rows: Opportunity[], key: string, dir: SortDir, numeric: boolean): Opportunity[] {
+function sortRows(
+  rows: Opportunity[],
+  key: string,
+  dir: SortDir,
+  numeric: boolean,
+): Opportunity[] {
   return [...rows].sort((a, b) => {
     const av = (a as any)[key]
     const bv = (b as any)[key]
@@ -127,29 +151,39 @@ export default function PipelineTab({
   onOppAdded?: (newOpp: Opportunity) => void
   onOppDeleted?: (id: string | number) => void
 }) {
-  const [selected, setSelected]               = useState<Opportunity | null>(null)
-  const [filterText, setFilterText]           = useState<string>('')
-  const [filterManager, setFilterManager]     = useState<string>('')
-  const [filterProduct, setFilterProduct]     = useState<string>('')
-  const [filterStage, setFilterStage]         = useState<string>('')
-  const [filterStatus, setFilterStatus]       = useState<string>('')
-  const [sortKey, setSortKey]                 = useState<string>('')
-  const [sortDir, setSortDir]                 = useState<SortDir>('asc')
-  const [deletingId, setDeletingId]           = useState<string | number | null>(null)
-  const searchRef                             = useRef<HTMLInputElement>(null)
+  const [selected, setSelected] = useState<Opportunity | null>(null)
+  const [filterText, setFilterText] = useState<string>('')
+  const [filterManager, setFilterManager] = useState<string>('')
+  const [filterProduct, setFilterProduct] = useState<string>('')
+  const [filterStage, setFilterStage] = useState<string>('')
+  const [filterStatus, setFilterStatus] = useState<string>('')
+  const [sortKey, setSortKey] = useState<string>('')
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
+  const [deletingId, setDeletingId] = useState<string | number | null>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
 
   // Include every product configured in Settings plus any ad-hoc products
   // present on existing opportunities — so the shortcuts/dropdown aren't
   // limited to products that already appear on a deal. Settings order is
   // preserved (no alphabetical sort), with ad-hoc products appended after.
-  const productOptions = Array.from(new Set([
-    ...(products ?? []),
-    ...opportunities.flatMap((r) => getProductLines(r).map((l) => l.product)).filter(Boolean),
-  ]))
-  const stageOptions   = Object.keys(STAGE_COLORS)
-  const statusOptions  = Array.from(new Set(opportunities.map((r) => (r as any).status ?? '').filter(Boolean))).sort()
+  const productOptions = Array.from(
+    new Set([
+      ...(products ?? []),
+      ...opportunities.flatMap((r) => getProductLines(r).map((l) => l.product)).filter(Boolean),
+    ]),
+  )
+  const stageOptions = Object.keys(STAGE_COLORS)
+  const statusOptions = Array.from(
+    new Set(opportunities.map((r) => (r as any).status ?? '').filter(Boolean)),
+  ).sort()
 
-  const anyFilterActive = !!(filterText || filterManager || filterProduct || filterStage || filterStatus)
+  const anyFilterActive = !!(
+    filterText ||
+    filterManager ||
+    filterProduct ||
+    filterStage ||
+    filterStatus
+  )
 
   function clearAllFilters() {
     setFilterText('')
@@ -173,16 +207,22 @@ export default function PipelineTab({
     if (filterText) {
       const q = filterText.trim().toLowerCase()
       const hit =
-        (r.name            ?? '').toLowerCase().includes(q) ||
-        ((r.customer_name  as string) ?? '').toLowerCase().includes(q) ||
-        ((r.owner          as string) ?? '').toLowerCase().includes(q) ||
-        ((r.product        as string) ?? '').toLowerCase().includes(q)
+        (r.name ?? '').toLowerCase().includes(q) ||
+        ((r.customer_name as string) ?? '').toLowerCase().includes(q) ||
+        ((r.owner as string) ?? '').toLowerCase().includes(q) ||
+        ((r.product as string) ?? '').toLowerCase().includes(q)
       if (!hit) return false
     }
-    if (filterManager && (r.owner   as string)?.toLowerCase() !== filterManager.toLowerCase()) return false
-    if (filterProduct && !getProductLines(r).some((l) => l.product.toLowerCase() === filterProduct.toLowerCase())) return false
-    if (filterStage   && r.stage?.toLowerCase() !== filterStage.toLowerCase())                 return false
-    if (filterStatus  && ((r as any).status ?? '')?.toLowerCase() !== filterStatus.toLowerCase()) return false
+    if (filterManager && (r.owner as string)?.toLowerCase() !== filterManager.toLowerCase())
+      return false
+    if (
+      filterProduct &&
+      !getProductLines(r).some((l) => l.product.toLowerCase() === filterProduct.toLowerCase())
+    )
+      return false
+    if (filterStage && r.stage?.toLowerCase() !== filterStage.toLowerCase()) return false
+    if (filterStatus && ((r as any).status ?? '')?.toLowerCase() !== filterStatus.toLowerCase())
+      return false
     return true
   })
 
@@ -214,17 +254,26 @@ export default function PipelineTab({
   async function handleRowDelete(e: React.MouseEvent, opp: Opportunity) {
     e.stopPropagation()
     if (deletingId != null) return
-    if (!confirm(`Permanently delete "${opp.name || 'this opportunity'}"? This cannot be undone.`)) return
+    if (
+      !confirm(`Permanently delete "${opp.name || 'this opportunity'}"? This cannot be undone.`)
+    )
+      return
     setDeletingId(opp.id)
     const { error } = await supabase.from('opportunities').delete().eq('id', opp.id)
     setDeletingId(null)
-    if (error) { alert(`Delete failed: ${error.message}`); return }
+    if (error) {
+      alert(`Delete failed: ${error.message}`)
+      return
+    }
     notifyEvent('opp_deleted', opp.name ?? '', {
-      'Opportunity':   opp.name ?? '',
-      'Account':       opp.customer_name ?? '',
+      Opportunity: opp.name ?? '',
+      Account: opp.customer_name ?? '',
       'Sales Manager': (opp.owner as string) ?? '',
-      'Stage':         opp.stage ?? '',
-      'Value':         opp.value != null ? `${(opp as any).currency ?? 'USD'} ${Number(opp.value).toLocaleString('en-US')}` : '',
+      Stage: opp.stage ?? '',
+      Value:
+        opp.value != null
+          ? `${(opp as any).currency ?? 'USD'} ${Number(opp.value).toLocaleString('en-US')}`
+          : '',
     })
     if (selected?.id === opp.id) setSelected(null)
     onOppDeleted?.(opp.id)
@@ -235,7 +284,9 @@ export default function PipelineTab({
       {/* ── Manager shortcut buttons ─────────────────────────────────────── */}
       {managers && managers.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Quick filter:</span>
+          <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+            Quick filter:
+          </span>
           <button
             onClick={() => setFilterManager('')}
             className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
@@ -247,7 +298,7 @@ export default function PipelineTab({
             All
           </button>
           {managers.map((name) => {
-            const color  = managerColors[name] ?? '#94a3b8'
+            const color = managerColors[name] ?? '#94a3b8'
             const active = filterManager === name
             return (
               <button
@@ -255,8 +306,8 @@ export default function PipelineTab({
                 onClick={() => setFilterManager(active ? '' : name)}
                 style={{
                   backgroundColor: active ? color : `${color}22`,
-                  color:           active ? '#fff' : color,
-                  borderColor:     color,
+                  color: active ? '#fff' : color,
+                  borderColor: color,
                 }}
                 className="rounded-full border px-3 py-1 text-xs font-semibold transition-all hover:opacity-90"
               >
@@ -270,7 +321,9 @@ export default function PipelineTab({
       {/* ── Product shortcut buttons ─────────────────────────────────────── */}
       {productOptions.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Product:</span>
+          <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+            Product:
+          </span>
           <button
             onClick={() => setFilterProduct('')}
             className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
@@ -304,10 +357,16 @@ export default function PipelineTab({
           <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
             <svg
               className="h-4 w-4 text-gray-400"
-              fill="none" viewBox="0 0 24 24"
-              stroke="currentColor" strokeWidth={2}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
             >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
             </svg>
           </div>
 
@@ -323,11 +382,20 @@ export default function PipelineTab({
           {/* Clear button — only visible when there is text */}
           {filterText && (
             <button
-              onClick={() => { setFilterText(''); searchRef.current?.focus() }}
+              onClick={() => {
+                setFilterText('')
+                searchRef.current?.focus()
+              }}
               className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 transition-colors hover:text-gray-700"
               aria-label="Clear search"
             >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <svg
+                className="h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.5}
+              >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
@@ -402,8 +470,20 @@ export default function PipelineTab({
                     >
                       {label}
                       <span className="flex flex-col leading-none text-[9px]">
-                        <span className={active && sortDir === 'asc'  ? 'text-blue-500' : 'text-gray-300'}>▲</span>
-                        <span className={active && sortDir === 'desc' ? 'text-blue-500' : 'text-gray-300'}>▼</span>
+                        <span
+                          className={
+                            active && sortDir === 'asc' ? 'text-blue-500' : 'text-gray-300'
+                          }
+                        >
+                          ▲
+                        </span>
+                        <span
+                          className={
+                            active && sortDir === 'desc' ? 'text-blue-500' : 'text-gray-300'
+                          }
+                        >
+                          ▼
+                        </span>
                       </span>
                     </button>
                   </th>
@@ -419,10 +499,20 @@ export default function PipelineTab({
           <tbody className="divide-y divide-gray-100 bg-white">
             {displayedRows.length === 0 ? (
               <tr>
-                <td colSpan={COLUMNS.length + (canDelete ? 1 : 0)} className="px-4 py-12 text-center">
+                <td
+                  colSpan={COLUMNS.length + (canDelete ? 1 : 0)}
+                  className="px-4 py-12 text-center"
+                >
                   {anyFilterActive ? (
                     <div>
-                      <p className="text-sm font-medium text-gray-500">No results for &quot;{filterText || [filterManager, filterProduct, filterStage, filterStatus].filter(Boolean).join(', ')}&quot;</p>
+                      <p className="text-sm font-medium text-gray-500">
+                        No results for &quot;
+                        {filterText ||
+                          [filterManager, filterProduct, filterStage, filterStatus]
+                            .filter(Boolean)
+                            .join(', ')}
+                        &quot;
+                      </p>
                       <button
                         onClick={clearAllFilters}
                         className="mt-2 text-xs text-blue-600 hover:underline"
@@ -433,7 +523,11 @@ export default function PipelineTab({
                   ) : (
                     <div>
                       <p className="text-sm font-medium text-gray-500">No opportunities yet.</p>
-                      <p className="mt-1 text-xs text-gray-400">Click the orange <span className="font-semibold text-orange-500">+ New Opportunity</span> button in the top bar to add your first deal.</p>
+                      <p className="mt-1 text-xs text-gray-400">
+                        Click the orange{' '}
+                        <span className="font-semibold text-orange-500">+ New Opportunity</span>{' '}
+                        button in the top bar to add your first deal.
+                      </p>
                     </div>
                   )}
                 </td>
@@ -474,7 +568,9 @@ export default function PipelineTab({
                   </td>
                   {/* Weighted Value */}
                   <td className="whitespace-nowrap px-4 py-3 font-semibold tabular-nums text-indigo-600">
-                    {opp.value != null ? fmtUSD(weightedValue(opp, probabilityDefaults), (opp as any).currency) : '—'}
+                    {opp.value != null
+                      ? fmtUSD(weightedValue(opp, probabilityDefaults), (opp as any).currency)
+                      : '—'}
                   </td>
                   {/* Stage */}
                   <td className="px-4 py-3">
@@ -502,7 +598,10 @@ export default function PipelineTab({
                   <td className="whitespace-nowrap px-4 py-3 text-gray-600">
                     {(opp as any).close_date ?? '—'}
                     {isOverdue(opp) && (
-                      <span className="ml-1.5 inline-flex items-center rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-600" title="Expected close quarter has passed — update the close date or the stage">
+                      <span
+                        className="ml-1.5 inline-flex items-center rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-600"
+                        title="Expected close quarter has passed — update the close date or the stage"
+                      >
                         Overdue
                       </span>
                     )}
@@ -514,7 +613,11 @@ export default function PipelineTab({
                   {/* Last updated (falls back to created date for old rows) */}
                   <td
                     className="whitespace-nowrap px-4 py-3 text-xs text-gray-400"
-                    title={(opp as any).updated_at ? `Last updated ${new Date(String((opp as any).updated_at)).toLocaleString()}` : undefined}
+                    title={
+                      (opp as any).updated_at
+                        ? `Last updated ${new Date(String((opp as any).updated_at)).toLocaleString()}`
+                        : undefined
+                    }
                   >
                     {fmtUpdated((opp as any).updated_at ?? (opp as any).created_at)}
                   </td>
@@ -530,12 +633,33 @@ export default function PipelineTab({
                       >
                         {deletingId === opp.id ? (
                           <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            />
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                            />
                           </svg>
                         ) : (
-                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          <svg
+                            className="h-4 w-4"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                            />
                           </svg>
                         )}
                       </button>

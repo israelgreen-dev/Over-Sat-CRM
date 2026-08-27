@@ -15,7 +15,12 @@
 import nodemailer from 'nodemailer'
 
 export function mailerConfigured(): boolean {
-  return !!(process.env.SMTP_HOST && process.env.SMTP_PORT && process.env.SMTP_USER && process.env.SMTP_PASS)
+  return !!(
+    process.env.SMTP_HOST &&
+    process.env.SMTP_PORT &&
+    process.env.SMTP_USER &&
+    process.env.SMTP_PASS
+  )
 }
 
 /** Sends an email to the recipients. Returns false when SMTP isn't configured. */

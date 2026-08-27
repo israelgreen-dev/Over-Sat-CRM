@@ -12,25 +12,27 @@ import { rateLimit, callerIp } from '@/lib/rate-limit'
 function adminClient() {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!serviceKey || serviceKey === 'your_service_role_key_here') return null
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    serviceKey,
-    { auth: { autoRefreshToken: false, persistSession: false } },
-  )
+  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  })
 }
 
 // POST /api/admin/invite — invite a user by email (sends magic-link invite)
 export async function POST(req: NextRequest) {
-  if (!rateLimit(callerIp(req), 5)) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+  if (!rateLimit(callerIp(req), 5))
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
 
   const { user, error: authError } = await requireAdmin(req)
-  if (authError || !user) return NextResponse.json({ error: authError ?? 'Unauthorized' }, { status: 401 })
+  if (authError || !user)
+    return NextResponse.json({ error: authError ?? 'Unauthorized' }, { status: 401 })
 
   const supabaseAdmin = adminClient()
-  if (!supabaseAdmin) return NextResponse.json({ error: 'Service role key not configured' }, { status: 503 })
+  if (!supabaseAdmin)
+    return NextResponse.json({ error: 'Service role key not configured' }, { status: 503 })
 
   const { email, name, role } = await req.json()
-  if (!email || !name || !role) return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+  if (!email || !name || !role)
+    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   if (!['admin', 'head_of_sales', 'manager', 'partner'].includes(role)) {
     return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
   }

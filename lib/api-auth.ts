@@ -33,7 +33,10 @@ export async function requireUser(req: NextRequest): Promise<AuthResult> {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
   )
 
-  const { data: { user }, error } = await supabase.auth.getUser(token)
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser(token)
   if (error || !user) {
     return { user: null, error: 'Unauthorized — invalid or expired token' }
   }

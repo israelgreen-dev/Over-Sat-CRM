@@ -10,30 +10,44 @@ import { supabase } from '@/lib/supabase'
  */
 export default function ResetPasswordScreen({ onDone }: { onDone: () => void }) {
   const [password, setPassword] = useState('')
-  const [confirm, setConfirm]   = useState('')
-  const [loading, setLoading]   = useState(false)
-  const [error, setError]       = useState<string | null>(null)
+  const [confirm, setConfirm] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (password.length < 8) { setError('Password must be at least 8 characters.'); return }
-    if (password !== confirm) { setError('Passwords do not match.'); return }
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters.')
+      return
+    }
+    if (password !== confirm) {
+      setError('Passwords do not match.')
+      return
+    }
     setLoading(true)
     setError(null)
     const { error } = await supabase.auth.updateUser({ password })
     setLoading(false)
-    if (error) { setError(error.message); return }
+    if (error) {
+      setError(error.message)
+      return
+    }
     onDone()
   }
 
-  const inputCls = 'w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-400 focus:bg-white focus:outline-none transition-colors'
+  const inputCls =
+    'w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-400 focus:bg-white focus:outline-none transition-colors'
 
   return (
     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
           <div className="inline-flex h-14 w-52 items-center justify-center rounded-2xl bg-white mb-4 shadow-lg overflow-hidden px-4 py-2">
-            <img src="/OS-Logo.png" alt="Over-Sat Logo" className="h-full w-full object-contain" />
+            <img
+              src="/OS-Logo.png"
+              alt="Over-Sat Logo"
+              className="h-full w-full object-contain"
+            />
           </div>
           <h1 className="text-2xl font-bold text-white">Set a new password</h1>
           <p className="mt-1 text-sm text-slate-400">Choose a new password for your account</p>

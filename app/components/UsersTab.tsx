@@ -29,14 +29,16 @@ function PasswordField({
   className?: string
 }) {
   const [visible, setVisible] = useState(false)
-  const [copied, setCopied]   = useState(false)
+  const [copied, setCopied] = useState(false)
 
   async function copy() {
     try {
       await navigator.clipboard.writeText(value)
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
-    } catch { /* clipboard unavailable — user can select the visible text */ }
+    } catch {
+      /* clipboard unavailable — user can select the visible text */
+    }
   }
 
   return (
@@ -56,20 +58,47 @@ function PasswordField({
           className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-gray-400 hover:text-gray-600"
         >
           {visible ? (
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
+              />
             </svg>
           ) : (
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+              />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+              />
             </svg>
           )}
         </button>
       </div>
       <button
         type="button"
-        onClick={() => { onChange(generatePassword()); setVisible(true) }}
+        onClick={() => {
+          onChange(generatePassword())
+          setVisible(true)
+        }}
         title="Generate a strong password"
         className="shrink-0 rounded-xl border border-gray-200 px-2.5 py-2 text-xs font-medium text-gray-500 hover:bg-gray-50"
       >
@@ -105,21 +134,29 @@ type User = {
 const ROLES: User['role'][] = ['admin', 'head_of_sales', 'manager', 'partner']
 
 const ROLE_LABELS: Record<User['role'], string> = {
-  admin:         'Admin',
+  admin: 'Admin',
   head_of_sales: 'Head of Sales',
-  manager:       'Sales Manager',
-  partner:       'Partner',
+  manager: 'Sales Manager',
+  partner: 'Partner',
 }
 
 const ROLE_COLORS: Record<User['role'], string> = {
-  admin:         'bg-purple-100 text-purple-700',
+  admin: 'bg-purple-100 text-purple-700',
   head_of_sales: 'bg-slate-100 text-slate-700',
-  manager:       'bg-blue-100 text-blue-700',
-  partner:       'bg-emerald-100 text-emerald-700',
+  manager: 'bg-blue-100 text-blue-700',
+  partner: 'bg-emerald-100 text-emerald-700',
 }
 
 // ── Invitation email preview component ────────────────────────────────────────
-function InvitePreview({ name, email, role }: { name: string; email: string; role: User['role'] }) {
+function InvitePreview({
+  name,
+  email,
+  role,
+}: {
+  name: string
+  email: string
+  role: User['role']
+}) {
   return (
     <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden text-sm font-sans shadow-inner">
       {/* Email header bar */}
@@ -143,7 +180,9 @@ function InvitePreview({ name, email, role }: { name: string; email: string; rol
             <img src="/OS-Logo.png" alt="Over-Sat" className="h-full w-full object-contain" />
           </div>
           <div className="border-l border-gray-200 pl-3">
-            <p className="text-xs font-bold uppercase tracking-widest text-gray-400">Over-Sat CRM</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-gray-400">
+              Over-Sat CRM
+            </p>
           </div>
         </div>
 
@@ -153,20 +192,25 @@ function InvitePreview({ name, email, role }: { name: string; email: string; rol
         </p>
         <p className="mb-4 text-gray-600 leading-relaxed">
           You&apos;ve been invited to join <strong>Over-Sat CRM</strong> as a{' '}
-          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${ROLE_COLORS[role]}`}>
+          <span
+            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${ROLE_COLORS[role]}`}
+          >
             {ROLE_LABELS[role]}
-          </span>.
+          </span>
+          .
         </p>
 
         {/* What you can do */}
         <div className="mb-5 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400">Your access</p>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400">
+            Your access
+          </p>
           <p className="text-gray-600 text-xs leading-relaxed">
             {role === 'admin' || role === 'head_of_sales'
               ? 'Full access — view and edit all leads, opportunities, analytics, targets, and settings.'
               : role === 'manager'
-              ? 'Sales Manager access — view and manage your own leads, opportunities, and performance.'
-              : 'Partner access — view-only access to opportunity data and analytics.'}
+                ? 'Sales Manager access — view and manage your own leads, opportunities, and performance.'
+                : 'Partner access — view-only access to opportunity data and analytics.'}
           </p>
         </div>
 
@@ -175,22 +219,31 @@ function InvitePreview({ name, email, role }: { name: string; email: string; rol
           <div className="inline-block rounded-xl bg-slate-800 px-6 py-3 text-sm font-semibold text-white">
             Accept Invitation & Set Password →
           </div>
-          <p className="mt-2 text-xs text-gray-400">
-            This link will expire in 24 hours.
-          </p>
+          <p className="mt-2 text-xs text-gray-400">This link will expire in 24 hours.</p>
         </div>
 
         {/* Login info */}
         <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 mb-5">
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-blue-400">Your login details</p>
-          <p className="text-xs text-blue-700"><strong>Email:</strong> {email || 'user@example.com'}</p>
-          <p className="text-xs text-blue-700 mt-0.5"><strong>CRM URL:</strong> {typeof window !== 'undefined' ? window.location.origin : 'https://your-crm-url.com'}</p>
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-blue-400">
+            Your login details
+          </p>
+          <p className="text-xs text-blue-700">
+            <strong>Email:</strong> {email || 'user@example.com'}
+          </p>
+          <p className="text-xs text-blue-700 mt-0.5">
+            <strong>CRM URL:</strong>{' '}
+            {typeof window !== 'undefined'
+              ? window.location.origin
+              : 'https://your-crm-url.com'}
+          </p>
         </div>
 
         {/* Footer */}
         <div className="border-t border-gray-100 pt-4 text-center text-xs text-gray-400">
           <p>Over-Sat Proprietary &amp; Confidential</p>
-          <p className="mt-0.5">If you did not expect this invitation, you can safely ignore this email.</p>
+          <p className="mt-0.5">
+            If you did not expect this invitation, you can safely ignore this email.
+          </p>
         </div>
       </div>
     </div>
@@ -208,13 +261,16 @@ function InviteModal({
   onSent: () => void
 }) {
   const [sending, setSending] = useState(false)
-  const [error, setError]     = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
   // null = not sent yet; otherwise the confirmation message to show.
-  const [sent, setSent]       = useState<string | null>(null)
+  const [sent, setSent] = useState<string | null>(null)
 
   async function sendInvite() {
-    setSending(true); setError(null)
-    const { data: { session } } = await supabase.auth.getSession()
+    setSending(true)
+    setError(null)
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
     const res = await fetch('/api/admin/invite', {
       method: 'POST',
       headers: {
@@ -225,29 +281,54 @@ function InviteModal({
     })
     const json = await res.json()
     setSending(false)
-    if (!res.ok) { setError(json.error); return }
-    setSent(json.existing
-      ? 'This user already has an account — a set-password link was emailed instead.'
-      : 'Invitation sent!')
+    if (!res.ok) {
+      setError(json.error)
+      return
+    }
+    setSent(
+      json.existing
+        ? 'This user already has an account — a set-password link was emailed instead.'
+        : 'Invitation sent!',
+    )
     // Capture callbacks immediately — by the time the timeout fires the
     // parent may have already set inviteTarget to null (modal dismissed),
     // which would cause onSent to read inviteTarget.email off null.
     const _onSent = onSent
     const _onClose = onClose
-    setTimeout(() => { _onSent(); _onClose() }, 2500)
+    setTimeout(() => {
+      _onSent()
+      _onClose()
+    }, 2500)
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-lg rounded-2xl bg-white shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Modal header */}
         <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
           <div>
             <h3 className="text-sm font-bold text-gray-900">Send Invitation</h3>
-            <p className="text-xs text-gray-400 mt-0.5">Preview the email before sending to <strong>{user.email}</strong></p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Preview the email before sending to <strong>{user.email}</strong>
+            </p>
           </div>
-          <button onClick={onClose} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100">
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <button
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100"
+          >
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
@@ -261,18 +342,29 @@ function InviteModal({
         {/* Actions */}
         <div className="border-t border-gray-100 px-6 py-4">
           {error && (
-            <p className="mb-3 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p>
+            <p className="mb-3 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-600">
+              {error}
+            </p>
           )}
           {sent ? (
             <div className="flex items-center gap-2 text-sm font-semibold text-emerald-600">
-              <svg className="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <svg
+                className="h-5 w-5 shrink-0"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.5}
+              >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
               {sent}
             </div>
           ) : (
             <div className="flex items-center justify-end gap-2">
-              <button onClick={onClose} className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">
+              <button
+                onClick={onClose}
+                className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+              >
                 Cancel
               </button>
               <button
@@ -280,8 +372,18 @@ function InviteModal({
                 disabled={sending}
                 className="flex items-center gap-2 rounded-xl bg-slate-800 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50"
               >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                  />
                 </svg>
                 {sending ? 'Sending…' : 'Send Invitation'}
               </button>
@@ -308,15 +410,20 @@ export default function UsersTab({
   onManagerColorChange?: (name: string, color: string) => void
   onManagerTerritoryChange?: (name: string, territory: string) => void
 }) {
-  const [users, setUsers]         = useState<User[]>([])
-  const [loading, setLoading]     = useState(true)
-  const [showForm, setShowForm]   = useState(false)
+  const [users, setUsers] = useState<User[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [error, setError]         = useState<string | null>(null)
-  const [busy, setBusy]           = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
   const [noServiceKey, setNoServiceKey] = useState(false)
 
-  const [form, setForm] = useState({ email: '', password: '', name: '', role: 'manager' as User['role'] })
+  const [form, setForm] = useState({
+    email: '',
+    password: '',
+    name: '',
+    role: 'manager' as User['role'],
+  })
 
   // Sorting: click a column header (Name / Email / Role) to sort, click again
   // to flip direction. null = original order (as returned by the API).
@@ -326,27 +433,32 @@ export default function UsersTab({
 
   function sortBy(key: SortKey) {
     if (sortKey === key) setSortAsc((v) => !v)
-    else { setSortKey(key); setSortAsc(true) }
+    else {
+      setSortKey(key)
+      setSortAsc(true)
+    }
   }
 
   const sortedUsers = useMemo(() => {
     if (!sortKey) return users
-    const val = (u: User) => (sortKey === 'role' ? (ROLE_LABELS[u.role] ?? u.role ?? '') : (u[sortKey] ?? ''))
+    const val = (u: User) =>
+      sortKey === 'role' ? (ROLE_LABELS[u.role] ?? u.role ?? '') : (u[sortKey] ?? '')
     return [...users].sort((a, b) => (sortAsc ? 1 : -1) * val(a).localeCompare(val(b)))
   }, [users, sortKey, sortAsc])
-  const [resetUserId, setResetUserId]   = useState<string | null>(null)
+  const [resetUserId, setResetUserId] = useState<string | null>(null)
   const [sentResetIds, setSentResetIds] = useState<Set<string>>(new Set())
   const [sentInviteIds, setSentInviteIds] = useState<Set<string>>(new Set())
 
   // Admin-set password viewing (role=admin only; server decides via canViewPasswords)
   const [canViewPasswords, setCanViewPasswords] = useState(false)
   const [revealedIds, setRevealedIds] = useState<Set<string>>(new Set())
-  const [copiedPwId, setCopiedPwId]   = useState<string | null>(null)
+  const [copiedPwId, setCopiedPwId] = useState<string | null>(null)
 
   function toggleReveal(id: string) {
     setRevealedIds((prev) => {
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id); else next.add(id)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
       return next
     })
   }
@@ -356,38 +468,59 @@ export default function UsersTab({
       await navigator.clipboard.writeText(pw)
       setCopiedPwId(id)
       setTimeout(() => setCopiedPwId((v) => (v === id ? null : v)), 1500)
-    } catch { /* clipboard unavailable — password is visible for manual copy */ }
+    } catch {
+      /* clipboard unavailable — password is visible for manual copy */
+    }
   }
 
   // Invite modal state
-  const [inviteTarget, setInviteTarget] = useState<{ name: string; email: string; role: User['role'] } | null>(null)
+  const [inviteTarget, setInviteTarget] = useState<{
+    name: string
+    email: string
+    role: User['role']
+  } | null>(null)
   // Show invite preview before sending (for newly created user)
-  const [pendingInvite, setPendingInvite] = useState<{ name: string; email: string; role: User['role'] } | null>(null)
+  const [pendingInvite, setPendingInvite] = useState<{
+    name: string
+    email: string
+    role: User['role']
+  } | null>(null)
 
   // Get the current session's JWT to authenticate admin API calls
   const authHeaders = useCallback(async (): Promise<Record<string, string>> => {
-    const { data: { session } } = await supabase.auth.getSession()
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
     return {
       'Content-Type': 'application/json',
       ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
     }
   }, [])
 
-  useEffect(() => { loadUsers() }, [])
+  useEffect(() => {
+    loadUsers()
+  }, [])
 
   async function loadUsers() {
     setLoading(true)
     const res = await fetch('/api/admin/users', { headers: await authHeaders() })
     const json = await res.json()
     setLoading(false)
-    if (res.status === 503) { setNoServiceKey(true); return }
+    if (res.status === 503) {
+      setNoServiceKey(true)
+      return
+    }
     if (json.users) setUsers(json.users)
     setCanViewPasswords(!!json.canViewPasswords)
   }
 
   async function createUser() {
-    if (form.password.length < 8) { setError('Password must be at least 8 characters'); return }
-    setBusy(true); setError(null)
+    if (form.password.length < 8) {
+      setError('Password must be at least 8 characters')
+      return
+    }
+    setBusy(true)
+    setError(null)
     const res = await fetch('/api/admin/users', {
       method: 'POST',
       headers: await authHeaders(),
@@ -395,7 +528,10 @@ export default function UsersTab({
     })
     const json = await res.json()
     setBusy(false)
-    if (!res.ok) { setError(json.error); return }
+    if (!res.ok) {
+      setError(json.error)
+      return
+    }
     const created = { name: form.name, email: form.email, role: form.role }
     setShowForm(false)
     setForm({ email: '', password: '', name: '', role: 'manager' })
@@ -404,9 +540,16 @@ export default function UsersTab({
     setPendingInvite(created)
   }
 
-  async function updateUser(id: string, updates: { name?: string; role?: string; password?: string; alsoManager?: boolean }) {
-    if (updates.password && updates.password.length < 8) { setError('Password must be at least 8 characters'); return }
-    setBusy(true); setError(null)
+  async function updateUser(
+    id: string,
+    updates: { name?: string; role?: string; password?: string; alsoManager?: boolean },
+  ) {
+    if (updates.password && updates.password.length < 8) {
+      setError('Password must be at least 8 characters')
+      return
+    }
+    setBusy(true)
+    setError(null)
     const res = await fetch('/api/admin/users', {
       method: 'PATCH',
       headers: await authHeaders(),
@@ -414,14 +557,18 @@ export default function UsersTab({
     })
     const json = await res.json()
     setBusy(false)
-    if (!res.ok) { setError(json.error); return }
+    if (!res.ok) {
+      setError(json.error)
+      return
+    }
     setEditingId(null)
     loadUsers()
   }
 
   async function deleteUser(id: string) {
     if (!confirm('Delete this user? This cannot be undone.')) return
-    setBusy(true); setError(null)
+    setBusy(true)
+    setError(null)
     const res = await fetch('/api/admin/users', {
       method: 'DELETE',
       headers: await authHeaders(),
@@ -429,12 +576,16 @@ export default function UsersTab({
     })
     const json = await res.json()
     setBusy(false)
-    if (!res.ok) { setError(json.error); return }
+    if (!res.ok) {
+      setError(json.error)
+      return
+    }
     loadUsers()
   }
 
   async function sendResetEmail(id: string, email: string) {
-    setBusy(true); setError(null)
+    setBusy(true)
+    setError(null)
     const res = await fetch('/api/admin/users', {
       method: 'PATCH',
       headers: await authHeaders(),
@@ -442,24 +593,35 @@ export default function UsersTab({
     })
     const json = await res.json()
     setBusy(false)
-    if (!res.ok) { setError(json.error); return }
+    if (!res.ok) {
+      setError(json.error)
+      return
+    }
     setResetUserId(null)
     setSentResetIds((prev) => new Set(prev).add(id))
   }
 
-  const inputCls = 'w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:border-blue-400 focus:bg-white focus:outline-none transition-colors'
+  const inputCls =
+    'w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:border-blue-400 focus:bg-white focus:outline-none transition-colors'
 
   if (noServiceKey) {
     return (
       <div className="rounded-2xl border border-amber-100 bg-amber-50 p-6">
         <h3 className="mb-2 text-sm font-bold text-amber-800">Service Role Key Required</h3>
         <p className="text-sm text-amber-700 mb-3">
-          To manage users, add your Supabase Service Role Key to <code className="bg-amber-100 px-1 rounded">.env.local</code>:
+          To manage users, add your Supabase Service Role Key to{' '}
+          <code className="bg-amber-100 px-1 rounded">.env.local</code>:
         </p>
         <ol className="text-sm text-amber-700 space-y-1 list-decimal list-inside">
           <li>Go to Supabase → Project Settings → API</li>
-          <li>Copy the <strong>service_role</strong> secret key</li>
-          <li>Open <code className="bg-amber-100 px-1 rounded">.env.local</code> and replace <code className="bg-amber-100 px-1 rounded">your_service_role_key_here</code> with it</li>
+          <li>
+            Copy the <strong>service_role</strong> secret key
+          </li>
+          <li>
+            Open <code className="bg-amber-100 px-1 rounded">.env.local</code> and replace{' '}
+            <code className="bg-amber-100 px-1 rounded">your_service_role_key_here</code> with
+            it
+          </li>
           <li>Restart the dev server</li>
         </ol>
       </div>
@@ -468,16 +630,17 @@ export default function UsersTab({
 
   return (
     <div className="space-y-6">
-
       {/* Invite modal for existing user */}
       {inviteTarget && (
         <InviteModal
           user={inviteTarget}
           onClose={() => setInviteTarget(null)}
-          onSent={() => setSentInviteIds((prev) => {
-            const u = users.find((u) => u.email === inviteTarget.email)
-            return u ? new Set(prev).add(u.id) : prev
-          })}
+          onSent={() =>
+            setSentInviteIds((prev) => {
+              const u = users.find((u) => u.email === inviteTarget.email)
+              return u ? new Set(prev).add(u.id) : prev
+            })
+          }
         />
       )}
 
@@ -502,10 +665,26 @@ export default function UsersTab({
               title="Sort by name"
               className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
             >
-              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                {sortKey === 'name' && !sortAsc
-                  ? <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h5M3 8h9M3 12h13m4-8l3-3m0 0l3 3m-3-3v18" />
-                  : <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h13M3 8h9M3 12h5m4 6l3 3m0 0l3-3m-3 3V4" />}
+              <svg
+                className="h-3.5 w-3.5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                {sortKey === 'name' && !sortAsc ? (
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M3 4h5M3 8h9M3 12h13m4-8l3-3m0 0l3 3m-3-3v18"
+                  />
+                ) : (
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M3 4h13M3 8h9M3 12h5m4 6l3 3m0 0l3-3m-3 3V4"
+                  />
+                )}
               </svg>
               {sortKey === 'name' && !sortAsc ? 'Z–A' : 'A–Z'}
             </button>
@@ -514,7 +693,10 @@ export default function UsersTab({
             {users.length}
           </span>
           <button
-            onClick={() => { setShowForm(true); setError(null) }}
+            onClick={() => {
+              setShowForm(true)
+              setError(null)
+            }}
             className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 transition-colors"
           >
             + Add User
@@ -524,15 +706,21 @@ export default function UsersTab({
 
       {/* Role permissions legend */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {([
-          { role: 'admin',         icon: '🔑', perms: 'Edit & view everything' },
-          { role: 'head_of_sales', icon: '👁',  perms: 'Edit & view everything' },
-          { role: 'manager',       icon: '👤', perms: 'Edit & view own area only' },
-          { role: 'partner',       icon: '🤝', perms: 'View only — all data' },
-        ] as const).map(({ role, icon, perms }) => (
+        {(
+          [
+            { role: 'admin', icon: '🔑', perms: 'Edit & view everything' },
+            { role: 'head_of_sales', icon: '👁', perms: 'Edit & view everything' },
+            { role: 'manager', icon: '👤', perms: 'Edit & view own area only' },
+            { role: 'partner', icon: '🤝', perms: 'View only — all data' },
+          ] as const
+        ).map(({ role, icon, perms }) => (
           <div key={role} className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
             <div className="flex items-center gap-2 mb-1">
-              <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${ROLE_COLORS[role]}`}>{ROLE_LABELS[role]}</span>
+              <span
+                className={`rounded-full px-2 py-0.5 text-xs font-semibold ${ROLE_COLORS[role]}`}
+              >
+                {ROLE_LABELS[role]}
+              </span>
               <span className="text-base">{icon}</span>
             </div>
             <p className="text-xs text-gray-500">{perms}</p>
@@ -552,29 +740,74 @@ export default function UsersTab({
           <h3 className="mb-4 text-sm font-bold text-gray-900">New User</h3>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Full Name</label>
-              <input className={inputCls} placeholder="e.g. Yossi Cohen" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">
+                Full Name
+              </label>
+              <input
+                className={inputCls}
+                placeholder="e.g. Yossi Cohen"
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Role</label>
-              <select className={inputCls} value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as User['role'] }))}>
-                {ROLES.map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">
+                Role
+              </label>
+              <select
+                className={inputCls}
+                value={form.role}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, role: e.target.value as User['role'] }))
+                }
+              >
+                {ROLES.map((r) => (
+                  <option key={r} value={r}>
+                    {ROLE_LABELS[r]}
+                  </option>
+                ))}
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Email</label>
-              <input type="email" className={inputCls} placeholder="user@example.com" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">
+                Email
+              </label>
+              <input
+                type="email"
+                className={inputCls}
+                placeholder="user@example.com"
+                value={form.email}
+                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+              />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Password</label>
-              <PasswordField value={form.password} onChange={(password) => setForm((f) => ({ ...f, password }))} />
-              <p className="mt-1 text-[11px] text-gray-400">Passwords are stored encrypted and can&apos;t be viewed later — copy it now if you plan to share it.</p>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">
+                Password
+              </label>
+              <PasswordField
+                value={form.password}
+                onChange={(password) => setForm((f) => ({ ...f, password }))}
+              />
+              <p className="mt-1 text-[11px] text-gray-400">
+                Passwords are stored encrypted and can&apos;t be viewed later — copy it now if
+                you plan to share it.
+              </p>
             </div>
           </div>
           <div className="mt-4 flex items-center justify-between">
-            <p className="text-xs text-gray-400">After creating, you&apos;ll be prompted to send an invitation email.</p>
+            <p className="text-xs text-gray-400">
+              After creating, you&apos;ll be prompted to send an invitation email.
+            </p>
             <div className="flex gap-2">
-              <button onClick={() => { setShowForm(false); setError(null) }} className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button
+                onClick={() => {
+                  setShowForm(false)
+                  setError(null)
+                }}
+                className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
               <button
                 onClick={createUser}
                 disabled={busy || !form.email || !form.password || !form.name}
@@ -597,14 +830,17 @@ export default function UsersTab({
           <table className="min-w-full divide-y divide-gray-100 text-sm">
             <thead className="bg-gray-50">
               <tr>
-                {([
-                  { label: 'Name',  key: 'name'  as const },
+                {[
+                  { label: 'Name', key: 'name' as const },
                   { label: 'Email', key: 'email' as const },
-                  { label: 'Role',  key: 'role'  as const },
+                  { label: 'Role', key: 'role' as const },
                   { label: 'Color & Territory', key: null },
                   { label: 'Actions', key: null },
-                ]).map(({ label, key }) => (
-                  <th key={label} className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-400">
+                ].map(({ label, key }) => (
+                  <th
+                    key={label}
+                    className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-400"
+                  >
                     {key ? (
                       <button
                         onClick={() => sortBy(key)}
@@ -616,7 +852,9 @@ export default function UsersTab({
                           {sortKey === key ? (sortAsc ? '▲' : '▼') : '↕'}
                         </span>
                       </button>
-                    ) : label}
+                    ) : (
+                      label
+                    )}
                   </th>
                 ))}
               </tr>
@@ -626,30 +864,46 @@ export default function UsersTab({
                 <tr key={u.id} className={u.id === currentUserId ? 'bg-blue-50' : ''}>
                   <td className="px-5 py-3 font-medium text-gray-900">
                     {editingId === u.id ? (
-                      <EditRow user={u} onSave={(upd) => updateUser(u.id, upd)} onCancel={() => setEditingId(null)} busy={busy} />
+                      <EditRow
+                        user={u}
+                        onSave={(upd) => updateUser(u.id, upd)}
+                        onCancel={() => setEditingId(null)}
+                        busy={busy}
+                      />
                     ) : (
                       <>
                         {u.name || '—'}
-                        {u.id === currentUserId && <span className="ml-2 text-xs text-blue-500">(you)</span>}
+                        {u.id === currentUserId && (
+                          <span className="ml-2 text-xs text-blue-500">(you)</span>
+                        )}
                       </>
                     )}
                   </td>
                   <td className="px-5 py-3 text-gray-500">{u.email}</td>
                   <td className="px-5 py-3">
                     {u.role ? (
-                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${ROLE_COLORS[u.role as User['role']] ?? 'bg-gray-100 text-gray-600'}`}>
+                      <span
+                        className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${ROLE_COLORS[u.role as User['role']] ?? 'bg-gray-100 text-gray-600'}`}
+                      >
                         {ROLE_LABELS[u.role as User['role']] ?? u.role}
                       </span>
-                    ) : '—'}
+                    ) : (
+                      '—'
+                    )}
                     {u.alsoManager && (u.role === 'admin' || u.role === 'head_of_sales') && (
-                      <span className="ml-1.5 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700" title="Also acts as a Sales Manager — appears in manager lists, targets and analytics">
+                      <span
+                        className="ml-1.5 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700"
+                        title="Also acts as a Sales Manager — appears in manager lists, targets and analytics"
+                      >
                         + Sales Manager
                       </span>
                     )}
                   </td>
                   {/* Color & territory — only for users who act as sales managers */}
                   <td className="px-5 py-3">
-                    {(u.role === 'manager' || (u.alsoManager && (u.role === 'admin' || u.role === 'head_of_sales'))) && u.name ? (
+                    {(u.role === 'manager' ||
+                      (u.alsoManager && (u.role === 'admin' || u.role === 'head_of_sales'))) &&
+                    u.name ? (
                       <div className="flex items-center gap-2">
                         <label
                           className="relative h-6 w-6 shrink-0 cursor-pointer overflow-hidden rounded-lg border border-gray-200 transition-transform hover:scale-110"
@@ -678,14 +932,27 @@ export default function UsersTab({
                   <td className="px-5 py-3">
                     {editingId !== u.id && resetUserId !== u.id && (
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <button onClick={() => setEditingId(u.id)} className="rounded-lg px-2.5 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50">Edit</button>
+                        <button
+                          onClick={() => setEditingId(u.id)}
+                          className="rounded-lg px-2.5 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50"
+                        >
+                          Edit
+                        </button>
 
                         {/* Invite button */}
                         {sentInviteIds.has(u.id) ? (
-                          <span className="rounded-lg px-2.5 py-1 text-xs font-medium text-emerald-600 bg-emerald-50">Invite sent ✓</span>
+                          <span className="rounded-lg px-2.5 py-1 text-xs font-medium text-emerald-600 bg-emerald-50">
+                            Invite sent ✓
+                          </span>
                         ) : (
                           <button
-                            onClick={() => setInviteTarget({ name: u.name, email: u.email, role: u.role as User['role'] })}
+                            onClick={() =>
+                              setInviteTarget({
+                                name: u.name,
+                                email: u.email,
+                                role: u.role as User['role'],
+                              })
+                            }
                             className="rounded-lg px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 border border-slate-200"
                           >
                             ✉ Send Invite
@@ -694,23 +961,32 @@ export default function UsersTab({
 
                         {/* Reset password */}
                         {sentResetIds.has(u.id) ? (
-                          <span className="rounded-lg px-2.5 py-1 text-xs font-medium text-emerald-600 bg-emerald-50">Reset sent ✓</span>
+                          <span className="rounded-lg px-2.5 py-1 text-xs font-medium text-emerald-600 bg-emerald-50">
+                            Reset sent ✓
+                          </span>
                         ) : (
-                          <button onClick={() => setResetUserId(u.id)} className="rounded-lg px-2.5 py-1 text-xs font-medium text-amber-600 hover:bg-amber-50">Reset pw</button>
+                          <button
+                            onClick={() => setResetUserId(u.id)}
+                            className="rounded-lg px-2.5 py-1 text-xs font-medium text-amber-600 hover:bg-amber-50"
+                          >
+                            Reset pw
+                          </button>
                         )}
 
                         {/* Eye icon (admins only, left of the trash icon):
                             reveal the last admin-set password inline. */}
                         {canViewPasswords && (
                           <>
-                            {revealedIds.has(u.id) && (
-                              u.setPassword ? (
+                            {revealedIds.has(u.id) &&
+                              (u.setPassword ? (
                                 <span className="flex items-center gap-1">
                                   <code
                                     className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-700"
-                                    title={u.setPasswordAt
-                                      ? `Set by admin on ${new Date(u.setPasswordAt).toLocaleDateString()} — if the user changed it since, this is outdated`
-                                      : undefined}
+                                    title={
+                                      u.setPasswordAt
+                                        ? `Set by admin on ${new Date(u.setPasswordAt).toLocaleDateString()} — if the user changed it since, this is outdated`
+                                        : undefined
+                                    }
                                   >
                                     {u.setPassword}
                                   </code>
@@ -723,33 +999,74 @@ export default function UsersTab({
                                   </button>
                                 </span>
                               ) : (
-                                <span className="text-[11px] text-gray-400" title="Passwords chosen by the user themselves can't be viewed. Set one via Edit to record it.">
+                                <span
+                                  className="text-[11px] text-gray-400"
+                                  title="Passwords chosen by the user themselves can't be viewed. Set one via Edit to record it."
+                                >
                                   Not recorded — set via Edit
                                 </span>
-                              )
-                            )}
+                              ))}
                             <button
                               onClick={() => toggleReveal(u.id)}
                               title={revealedIds.has(u.id) ? 'Hide password' : 'View password'}
                               className={`flex h-7 w-7 items-center justify-center rounded-lg transition-colors ${revealedIds.has(u.id) ? 'bg-gray-100 text-gray-600' : 'text-gray-300 hover:bg-gray-100 hover:text-gray-600'}`}
                             >
                               {revealedIds.has(u.id) ? (
-                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                                <svg
+                                  className="h-4 w-4"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                  strokeWidth={2}
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
+                                  />
                                 </svg>
                               ) : (
-                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                <svg
+                                  className="h-4 w-4"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                  strokeWidth={2}
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                                  />
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                                  />
                                 </svg>
                               )}
                             </button>
                           </>
                         )}
                         {u.id !== currentUserId && (
-                          <button onClick={() => deleteUser(u.id)} disabled={busy} title="Delete user" className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-300 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50">
-                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          <button
+                            onClick={() => deleteUser(u.id)}
+                            disabled={busy}
+                            title="Delete user"
+                            className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-300 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
+                          >
+                            <svg
+                              className="h-4 w-4"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                              strokeWidth={2}
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                              />
                             </svg>
                           </button>
                         )}
@@ -757,9 +1074,22 @@ export default function UsersTab({
                     )}
                     {resetUserId === u.id && (
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500">Send reset email to <strong>{u.email}</strong>?</span>
-                        <button onClick={() => sendResetEmail(u.id, u.email)} disabled={busy} className="rounded-lg bg-slate-800 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50">Send</button>
-                        <button onClick={() => setResetUserId(null)} className="text-xs text-gray-400 hover:text-gray-600">✕</button>
+                        <span className="text-xs text-gray-500">
+                          Send reset email to <strong>{u.email}</strong>?
+                        </span>
+                        <button
+                          onClick={() => sendResetEmail(u.id, u.email)}
+                          disabled={busy}
+                          className="rounded-lg bg-slate-800 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50"
+                        >
+                          Send
+                        </button>
+                        <button
+                          onClick={() => setResetUserId(null)}
+                          className="text-xs text-gray-400 hover:text-gray-600"
+                        >
+                          ✕
+                        </button>
                       </div>
                     )}
                   </td>
@@ -774,11 +1104,21 @@ export default function UsersTab({
 }
 
 // ── Edit row ──────────────────────────────────────────────────────────────────
-function EditRow({ user, onSave, onCancel, busy }: { user: User; onSave: (u: { name: string; role: string; password?: string; alsoManager?: boolean }) => void; onCancel: () => void; busy: boolean }) {
-  const [name, setName]         = useState(user.name)
-  const [role, setRole]         = useState(user.role)
+function EditRow({
+  user,
+  onSave,
+  onCancel,
+  busy,
+}: {
+  user: User
+  onSave: (u: { name: string; role: string; password?: string; alsoManager?: boolean }) => void
+  onCancel: () => void
+  busy: boolean
+}) {
+  const [name, setName] = useState(user.name)
+  const [role, setRole] = useState(user.role)
   const [password, setPassword] = useState('')
-  const [showPw, setShowPw]     = useState(false)
+  const [showPw, setShowPw] = useState(false)
   const [alsoManager, setAlsoManager] = useState(!!user.alsoManager)
   const dualEligible = role === 'admin' || role === 'head_of_sales'
   return (
@@ -796,7 +1136,11 @@ function EditRow({ user, onSave, onCancel, busy }: { user: User; onSave: (u: { n
           value={role}
           onChange={(e) => setRole(e.target.value as User['role'])}
         >
-          {ROLES.map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
+          {ROLES.map((r) => (
+            <option key={r} value={r}>
+              {ROLE_LABELS[r]}
+            </option>
+          ))}
         </select>
         <button
           type="button"
@@ -808,8 +1152,15 @@ function EditRow({ user, onSave, onCancel, busy }: { user: User; onSave: (u: { n
       </div>
       {showPw && (
         <div className="w-96 max-w-full">
-          <PasswordField value={password} onChange={setPassword} placeholder="New password (min. 8 chars)" />
-          <p className="mt-1 text-[11px] text-gray-400">Current passwords are stored encrypted and can&apos;t be viewed — set a new one here and copy it to share.</p>
+          <PasswordField
+            value={password}
+            onChange={setPassword}
+            placeholder="New password (min. 8 chars)"
+          />
+          <p className="mt-1 text-[11px] text-gray-400">
+            Current passwords are stored encrypted and can&apos;t be viewed — set a new one here
+            and copy it to share.
+          </p>
         </div>
       )}
       {dualEligible && (
@@ -826,13 +1177,22 @@ function EditRow({ user, onSave, onCancel, busy }: { user: User; onSave: (u: { n
       )}
       <div className="flex items-center gap-2">
         <button
-          onClick={() => onSave({ name, role, alsoManager: dualEligible ? alsoManager : false, ...(password ? { password } : {}) })}
+          onClick={() =>
+            onSave({
+              name,
+              role,
+              alsoManager: dualEligible ? alsoManager : false,
+              ...(password ? { password } : {}),
+            })
+          }
           disabled={busy || !name.trim()}
           className="rounded-lg bg-green-600 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50"
         >
           {busy ? 'Saving…' : 'Save'}
         </button>
-        <button onClick={onCancel} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+        <button onClick={onCancel} className="text-xs text-gray-400 hover:text-gray-600">
+          Cancel
+        </button>
       </div>
     </div>
   )

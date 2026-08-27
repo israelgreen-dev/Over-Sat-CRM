@@ -10,16 +10,16 @@ import { toUSD, fmtUSD } from '@/lib/currency'
 const MANAGERS = Object.keys(MANAGER_TARGETS)
 
 const STAGE_DOT: Record<string, string> = {
-  Discovery:     'bg-blue-400',
-  Proposal:    'bg-yellow-400',
+  Discovery: 'bg-blue-400',
+  Proposal: 'bg-yellow-400',
   Negotiation: 'bg-orange-400',
-  Win:         'bg-green-500',
-  Loss:        'bg-red-400',
+  Win: 'bg-green-500',
+  Loss: 'bg-red-400',
 }
 
 function fmtShort(n: number) {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1_000)     return `$${(n / 1_000).toFixed(0)}K`
+  if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`
   return `$${n}`
 }
 
@@ -40,22 +40,42 @@ export default function ManagersTab({
 }) {
   const managerColors = managerColorsProp
   const managers = managerNames.map((name) => {
-    const opps     = opportunities.filter(
+    const opps = opportunities.filter(
       (o) => (o.owner as string)?.toLowerCase() === name.toLowerCase(),
     )
     // All sums converted to USD so mixed-currency deals aggregate correctly.
-    const forecast = opps.filter((o) => o.stage !== 'Loss').reduce((s, o) => s + toUSD(o.value ?? 0, (o as any).currency), 0)
-    const closed   = opps.filter((o) => o.stage === 'Win').reduce((s, o) => s + toUSD(((o as any).final_win_value ?? o.value ?? 0), (o as any).currency), 0)
-    const open     = opps.filter((o) => !['Win', 'Loss'].includes(o.stage)).reduce((s, o) => s + toUSD(o.value ?? 0, (o as any).currency), 0)
-    const target   = managerTargets[name] ?? 0
-    const pct      = target > 0 ? Math.min(Math.round((closed / target) * 100), 999) : 0
+    const forecast = opps
+      .filter((o) => o.stage !== 'Loss')
+      .reduce((s, o) => s + toUSD(o.value ?? 0, (o as any).currency), 0)
+    const closed = opps
+      .filter((o) => o.stage === 'Win')
+      .reduce(
+        (s, o) => s + toUSD((o as any).final_win_value ?? o.value ?? 0, (o as any).currency),
+        0,
+      )
+    const open = opps
+      .filter((o) => !['Win', 'Loss'].includes(o.stage))
+      .reduce((s, o) => s + toUSD(o.value ?? 0, (o as any).currency), 0)
+    const target = managerTargets[name] ?? 0
+    const pct = target > 0 ? Math.min(Math.round((closed / target) * 100), 999) : 0
     const topDeals = [...opps].sort((a, b) => (b.value ?? 0) - (a.value ?? 0)).slice(0, 3)
     // Active leads only — dropped/converted no longer need attention.
     const activeLeads = leads.filter(
-      (l) => (l.owner ?? '').toLowerCase() === name.toLowerCase()
-        && !['Dropped', 'Converted'].includes(l.status ?? 'New'),
+      (l) =>
+        (l.owner ?? '').toLowerCase() === name.toLowerCase() &&
+        !['Dropped', 'Converted'].includes(l.status ?? 'New'),
     ).length
-    return { name, target, forecast, closed, open, pct, topDeals, count: opps.length, activeLeads }
+    return {
+      name,
+      target,
+      forecast,
+      closed,
+      open,
+      pct,
+      topDeals,
+      count: opps.length,
+      activeLeads,
+    }
   })
 
   const [selected, setSelected] = useState<string | null>(null)
@@ -63,7 +83,7 @@ export default function ManagersTab({
   if (selected) {
     const m = managers.find((x) => x.name === selected)!
     const color = managerColors[selected] ?? '#94a3b8'
-    const opps  = opportunities.filter(
+    const opps = opportunities.filter(
       (o) => (o.owner as string)?.toLowerCase() === selected.toLowerCase(),
     )
     return (
@@ -106,7 +126,11 @@ type ManagerRow = {
 const STAGE_ORDER = ['Discovery', 'Proposal', 'Negotiation', 'Win', 'Loss']
 
 function ManagerDrillDown({
-  m, color, opps, onBack, uploaderName,
+  m,
+  color,
+  opps,
+  onBack,
+  uploaderName,
 }: {
   m: ManagerRow
   color: string
@@ -115,7 +139,9 @@ function ManagerDrillDown({
   uploaderName: string
 }) {
   const sorted = [...opps].sort(
-    (a, b) => STAGE_ORDER.indexOf(a.stage) - STAGE_ORDER.indexOf(b.stage) || (b.value ?? 0) - (a.value ?? 0),
+    (a, b) =>
+      STAGE_ORDER.indexOf(a.stage) - STAGE_ORDER.indexOf(b.stage) ||
+      (b.value ?? 0) - (a.value ?? 0),
   )
 
   return (
@@ -126,7 +152,13 @@ function ManagerDrillDown({
           onClick={onBack}
           className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 shadow-sm hover:bg-gray-50 transition-colors"
         >
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg
+            className="h-4 w-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
           Sales Managers
@@ -148,12 +180,15 @@ function ManagerDrillDown({
       {/* Summary strip */}
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
-          { label: 'Target',   value: fmtShort(m.target),   cls: 'text-gray-900' },
-          { label: 'Won',      value: fmtShort(m.closed),   cls: 'text-green-600' },
+          { label: 'Target', value: fmtShort(m.target), cls: 'text-gray-900' },
+          { label: 'Won', value: fmtShort(m.closed), cls: 'text-green-600' },
           { label: 'Open Pipeline', value: fmtShort(m.open), cls: 'text-blue-600' },
-          { label: 'Active Leads',  value: String(m.activeLeads), cls: 'text-emerald-600' },
+          { label: 'Active Leads', value: String(m.activeLeads), cls: 'text-emerald-600' },
         ].map(({ label, value, cls }) => (
-          <div key={label} className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm text-center">
+          <div
+            key={label}
+            className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm text-center"
+          >
             <p className="text-xs text-gray-400">{label}</p>
             <p className={`text-lg font-bold ${cls}`}>{value}</p>
           </div>
@@ -182,19 +217,29 @@ function ManagerDrillDown({
                   <td className="px-4 py-3 font-medium text-gray-900">{o.name ?? '—'}</td>
                   <td className="px-4 py-3 text-gray-600">{o.customer_name ?? '—'}</td>
                   <td className="px-4 py-3">
-                    <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${
-                      o.stage === 'Win'         ? 'bg-green-100 text-green-700' :
-                      o.stage === 'Loss'        ? 'bg-red-100 text-red-600' :
-                      o.stage === 'Negotiation'? 'bg-orange-100 text-orange-700' :
-                      o.stage === 'Proposal'   ? 'bg-yellow-100 text-yellow-700' :
-                                                  'bg-blue-100 text-blue-700'
-                    }`}>
-                      <span className={`h-1.5 w-1.5 rounded-full ${STAGE_DOT[o.stage] ?? 'bg-gray-300'}`} />
+                    <span
+                      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${
+                        o.stage === 'Win'
+                          ? 'bg-green-100 text-green-700'
+                          : o.stage === 'Loss'
+                            ? 'bg-red-100 text-red-600'
+                            : o.stage === 'Negotiation'
+                              ? 'bg-orange-100 text-orange-700'
+                              : o.stage === 'Proposal'
+                                ? 'bg-yellow-100 text-yellow-700'
+                                : 'bg-blue-100 text-blue-700'
+                      }`}
+                    >
+                      <span
+                        className={`h-1.5 w-1.5 rounded-full ${STAGE_DOT[o.stage] ?? 'bg-gray-300'}`}
+                      />
                       {o.stage}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-gray-600">{(o.product as string) ?? '—'}</td>
-                  <td className="px-4 py-3 text-right font-bold text-gray-900">{fmtUSD(o.value ?? 0, (o as any).currency)}</td>
+                  <td className="px-4 py-3 text-right font-bold text-gray-900">
+                    {fmtUSD(o.value ?? 0, (o as any).currency)}
+                  </td>
                   <td className="px-4 py-3 text-gray-500">{(o as any).close_date ?? '—'}</td>
                 </tr>
               ))}
@@ -204,16 +249,20 @@ function ManagerDrillDown({
       </div>
 
       {/* Documents */}
-      <ManagerDocuments
-        managerName={m.name}
-        uploaderName={uploaderName}
-        color={color}
-      />
+      <ManagerDocuments managerName={m.name} uploaderName={uploaderName} color={color} />
     </div>
   )
 }
 
-function ManagerCard({ m, color, onClick }: { m: ManagerRow; color: string; onClick: () => void }) {
+function ManagerCard({
+  m,
+  color,
+  onClick,
+}: {
+  m: ManagerRow
+  color: string
+  onClick: () => void
+}) {
   return (
     <div
       className="flex flex-col rounded-xl border border-gray-100 bg-white shadow-sm overflow-hidden cursor-pointer hover:shadow-md hover:border-gray-200 transition-all"

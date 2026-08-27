@@ -21,11 +21,13 @@ function adminClient() {
 
 // ── GET ───────────────────────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
-  if (!rateLimit(callerIp(req), 60)) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+  if (!rateLimit(callerIp(req), 60))
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
 
   // Any authenticated user may list documents (UI is already role-gated).
   const { user, error: authError } = await requireUser(req)
-  if (authError || !user) return NextResponse.json({ error: authError ?? 'Unauthorized' }, { status: 401 })
+  if (authError || !user)
+    return NextResponse.json({ error: authError ?? 'Unauthorized' }, { status: 401 })
 
   const manager = req.nextUrl.searchParams.get('manager')
   if (!manager) return NextResponse.json({ error: 'manager required' }, { status: 400 })
@@ -43,16 +45,18 @@ export async function GET(req: NextRequest) {
 
 // ── POST ──────────────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
-  if (!rateLimit(callerIp(req), 20)) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+  if (!rateLimit(callerIp(req), 20))
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
 
   // Uploads are restricted to admin / head_of_sales (matches the UI).
   const { user, error: authError } = await requireAdmin(req)
-  if (authError || !user) return NextResponse.json({ error: authError ?? 'Unauthorized' }, { status: 401 })
+  if (authError || !user)
+    return NextResponse.json({ error: authError ?? 'Unauthorized' }, { status: 401 })
 
   const form = await req.formData()
-  const file    = form.get('file') as File | null
+  const file = form.get('file') as File | null
   const manager = form.get('manager') as string | null
-  const note    = (form.get('note') as string | null) ?? ''
+  const note = (form.get('note') as string | null) ?? ''
   const uploadedBy = (form.get('uploaded_by') as string | null) ?? ''
 
   if (!file || !manager) {
@@ -66,7 +70,7 @@ export async function POST(req: NextRequest) {
 
   // Upload file to Supabase Storage
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
-  const path     = `${manager}/${Date.now()}_${safeName}`
+  const path = `${manager}/${Date.now()}_${safeName}`
 
   const arrayBuffer = await file.arrayBuffer()
   const { error: storageError } = await sb.storage
@@ -76,20 +80,22 @@ export async function POST(req: NextRequest) {
   if (storageError) return NextResponse.json({ error: storageError.message }, { status: 500 })
 
   // Get public URL
-  const { data: { publicUrl } } = sb.storage.from('manager-docs').getPublicUrl(path)
+  const {
+    data: { publicUrl },
+  } = sb.storage.from('manager-docs').getPublicUrl(path)
 
   // Insert metadata row
   const { data: row, error: dbError } = await sb
     .from('manager_documents')
     .insert({
-      manager_name:  manager,
-      file_name:     file.name,
-      file_path:     path,
-      file_url:      publicUrl,
-      file_type:     file.type,
-      file_size:     file.size,
+      manager_name: manager,
+      file_name: file.name,
+      file_path: path,
+      file_url: publicUrl,
+      file_type: file.type,
+      file_size: file.size,
       note,
-      uploaded_by:   uploadedBy,
+      uploaded_by: uploadedBy,
     })
     .select()
     .single()
@@ -100,11 +106,13 @@ export async function POST(req: NextRequest) {
 
 // ── DELETE ────────────────────────────────────────────────────────────────────
 export async function DELETE(req: NextRequest) {
-  if (!rateLimit(callerIp(req), 20)) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+  if (!rateLimit(callerIp(req), 20))
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
 
   // Deletions are restricted to admin / head_of_sales (matches the UI).
   const { user, error: authError } = await requireAdmin(req)
-  if (authError || !user) return NextResponse.json({ error: authError ?? 'Unauthorized' }, { status: 401 })
+  if (authError || !user)
+    return NextResponse.json({ error: authError ?? 'Unauthorized' }, { status: 401 })
 
   const id = req.nextUrl.searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
@@ -118,7 +126,8 @@ export async function DELETE(req: NextRequest) {
     .eq('id', id)
     .single()
 
-  if (fetchError || !doc) return NextResponse.json({ error: 'Document not found' }, { status: 404 })
+  if (fetchError || !doc)
+    return NextResponse.json({ error: 'Document not found' }, { status: 404 })
 
   // Delete from storage
   await sb.storage.from('manager-docs').remove([doc.file_path])

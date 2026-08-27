@@ -5,8 +5,12 @@
  */
 
 export const NOTIFICATION_EVENTS = [
-  'lead_created', 'lead_updated', 'lead_deleted',
-  'opp_created', 'opp_updated', 'opp_deleted',
+  'lead_created',
+  'lead_updated',
+  'lead_deleted',
+  'opp_created',
+  'opp_updated',
+  'opp_deleted',
 ] as const
 
 export type NotificationEvent = (typeof NOTIFICATION_EVENTS)[number]
@@ -15,9 +19,9 @@ export const EVENT_LABELS: Record<NotificationEvent, string> = {
   lead_created: 'Lead created',
   lead_updated: 'Lead updated',
   lead_deleted: 'Lead deleted',
-  opp_created:  'Opportunity created',
-  opp_updated:  'Opportunity updated',
-  opp_deleted:  'Opportunity deleted',
+  opp_created: 'Opportunity created',
+  opp_updated: 'Opportunity updated',
+  opp_deleted: 'Opportunity deleted',
 }
 
 export type NotificationMode = 'instant' | 'daily' | 'weekly' | 'monthly'
@@ -48,7 +52,7 @@ export const DEFAULT_ROLE_SETTINGS: NotificationSettings = {
 }
 
 export const DEFAULT_NOTIFICATION_CONFIG: NotificationConfig = {
-  admin:         { ...DEFAULT_ROLE_SETTINGS, events: { ...DEFAULT_ROLE_SETTINGS.events } },
+  admin: { ...DEFAULT_ROLE_SETTINGS, events: { ...DEFAULT_ROLE_SETTINGS.events } },
   head_of_sales: { ...DEFAULT_ROLE_SETTINGS, events: { ...DEFAULT_ROLE_SETTINGS.events } },
 }
 
@@ -65,7 +69,7 @@ export function normalizeNotificationConfig(raw: unknown): NotificationConfig {
   }
   const cfg = r as Partial<NotificationConfig>
   return {
-    admin:         { ...DEFAULT_ROLE_SETTINGS, ...(cfg.admin ?? {}) },
+    admin: { ...DEFAULT_ROLE_SETTINGS, ...(cfg.admin ?? {}) },
     head_of_sales: { ...DEFAULT_ROLE_SETTINGS, ...(cfg.head_of_sales ?? {}) },
   }
 }

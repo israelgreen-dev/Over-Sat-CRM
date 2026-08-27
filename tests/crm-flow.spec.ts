@@ -86,9 +86,9 @@ async function setupAuthMocks(page: Page): Promise<void> {
  */
 async function waitForDashboard(page: Page): Promise<void> {
   // The brand name renders as text inside the header's logo button.
-  await expect(
-    page.getByRole('banner').getByText('Over-Sat CRM'),
-  ).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByRole('banner').getByText('Over-Sat CRM')).toBeVisible({
+    timeout: 20_000,
+  })
 }
 
 /**
@@ -96,9 +96,7 @@ async function waitForDashboard(page: Page): Promise<void> {
  */
 async function goToPipeline(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Pipeline' }).first().click()
-  await expect(
-    page.getByPlaceholder(/search by opportunity, account/i),
-  ).toBeVisible()
+  await expect(page.getByPlaceholder(/search by opportunity, account/i)).toBeVisible()
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -127,10 +125,7 @@ test.describe('CRM main flows', () => {
 
     // Also catch uncaught page errors that mention hydration.
     page.on('pageerror', (err) => {
-      if (
-        err.message.includes('Hydration') ||
-        err.message.includes('hydration')
-      ) {
+      if (err.message.includes('Hydration') || err.message.includes('hydration')) {
         hydrationErrors.push(err.message)
       }
     })
@@ -158,22 +153,20 @@ test.describe('CRM main flows', () => {
 
     // The search bar is exclusive to the Pipeline view — its visibility
     // confirms the correct tab rendered.
-    await expect(
-      page.getByPlaceholder(/search by opportunity, account/i),
-    ).toBeVisible()
+    await expect(page.getByPlaceholder(/search by opportunity, account/i)).toBeVisible()
 
     // ── Pipeline → Dashboard ──────────────────────────────────────────────
     await page.getByRole('button', { name: 'Dashboard' }).first().click()
 
     // The KPI summary cards are exclusive to the Dashboard analytics view.
     // "Overall Target" or "My Target" appears as a card label.
-    await expect(
-      page.getByText(/Overall Target|My Target/i).first(),
-    ).toBeVisible()
+    await expect(page.getByText(/Overall Target|My Target/i).first()).toBeVisible()
   })
 
   // ─── 3. Loss stage reveals required validation fields ──────────────────────
-  test('editing an opportunity and selecting Loss stage reveals Loss Reason and Loss Description inputs', async ({ page }) => {
+  test('editing an opportunity and selecting Loss stage reveals Loss Reason and Loss Description inputs', async ({
+    page,
+  }) => {
     // The stub opportunity that our mock Supabase INSERT will return.
     // Using a distinctive name so the assertion never matches an unrelated row.
     const STUB_OPP_NAME = 'E2E Loss-Stage Test Deal'
@@ -253,9 +246,7 @@ test.describe('CRM main flows', () => {
 
     // The Loss Reason select must have its placeholder option visible,
     // confirming the <select> rendered (not just the label).
-    await expect(
-      page.locator('select').filter({ hasText: /Select a reason/i }),
-    ).toBeVisible()
+    await expect(page.locator('select').filter({ hasText: /Select a reason/i })).toBeVisible()
 
     // The Loss Description textarea must be rendered and accept input.
     const lossDescTextarea = page.locator('textarea[placeholder="Required"]')

@@ -5,7 +5,9 @@ import { supabase } from '@/lib/supabase'
 
 // The manager-docs API requires a Bearer token (see lib/api-auth.ts).
 async function authHeaders(): Promise<Record<string, string>> {
-  const { data: { session } } = await supabase.auth.getSession()
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
   return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}
 }
 
@@ -23,21 +25,24 @@ type Doc = {
 
 function fmtSize(bytes: number) {
   if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(1)} MB`
-  if (bytes >= 1_000)     return `${(bytes / 1_000).toFixed(0)} KB`
+  if (bytes >= 1_000) return `${(bytes / 1_000).toFixed(0)} KB`
   return `${bytes} B`
 }
 
 function fmtDate(iso: string) {
   return new Intl.DateTimeFormat('en-GB', {
-    day: '2-digit', month: 'short', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
   }).format(new Date(iso))
 }
 
 function fileIcon(type: string) {
-  if (type.startsWith('image/'))       return '🖼️'
-  if (type === 'application/pdf')      return '📄'
-  if (type.includes('word'))           return '📝'
+  if (type.startsWith('image/')) return '🖼️'
+  if (type === 'application/pdf') return '📄'
+  if (type.includes('word')) return '📝'
   if (type.includes('sheet') || type.includes('excel')) return '📊'
   if (type.includes('presentation') || type.includes('powerpoint')) return '📑'
   return '📎'
@@ -52,19 +57,21 @@ export default function ManagerDocuments({
   uploaderName: string
   color?: string
 }) {
-  const [docs, setDocs]           = useState<Doc[]>([])
-  const [loading, setLoading]     = useState(true)
+  const [docs, setDocs] = useState<Doc[]>([])
+  const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
-  const [note, setNote]           = useState('')
-  const [error, setError]         = useState<string | null>(null)
-  const [deleting, setDeleting]   = useState<string | null>(null)
-  const fileRef                   = useRef<HTMLInputElement>(null)
-  const noteRef                   = useRef<string>('')
+  const [note, setNote] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const noteRef = useRef<string>('')
 
   async function load() {
     setLoading(true)
     try {
-      const res  = await fetch(`/api/manager-docs?manager=${encodeURIComponent(managerName)}`, { headers: await authHeaders() })
+      const res = await fetch(`/api/manager-docs?manager=${encodeURIComponent(managerName)}`, {
+        headers: await authHeaders(),
+      })
       const data = await res.json()
       setDocs(Array.isArray(data) ? data : [])
     } catch {
@@ -74,7 +81,9 @@ export default function ManagerDocuments({
     }
   }
 
-  useEffect(() => { load() }, [managerName])
+  useEffect(() => {
+    load()
+  }, [managerName])
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -84,12 +93,19 @@ export default function ManagerDocuments({
     setError(null)
     try {
       const form = new FormData()
-      form.append('file',        file)
-      form.append('manager',     managerName)
-      form.append('note',        currentNote)
+      form.append('file', file)
+      form.append('manager', managerName)
+      form.append('note', currentNote)
       form.append('uploaded_by', uploaderName)
-      const res = await fetch('/api/manager-docs', { method: 'POST', body: form, headers: await authHeaders() })
-      if (!res.ok) { const d = await res.json(); throw new Error(d.error ?? 'Upload failed') }
+      const res = await fetch('/api/manager-docs', {
+        method: 'POST',
+        body: form,
+        headers: await authHeaders(),
+      })
+      if (!res.ok) {
+        const d = await res.json()
+        throw new Error(d.error ?? 'Upload failed')
+      }
       setNote('')
       noteRef.current = ''
       if (fileRef.current) fileRef.current.value = ''
@@ -105,7 +121,10 @@ export default function ManagerDocuments({
     if (!confirm(`Delete "${fileName}"? This cannot be undone.`)) return
     setDeleting(id)
     try {
-      const res = await fetch(`/api/manager-docs?id=${id}`, { method: 'DELETE', headers: await authHeaders() })
+      const res = await fetch(`/api/manager-docs?id=${id}`, {
+        method: 'DELETE',
+        headers: await authHeaders(),
+      })
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
         setError(d.error ?? 'Delete failed')
@@ -122,11 +141,23 @@ export default function ManagerDocuments({
   return (
     <div className="rounded-xl border border-gray-100 bg-white shadow-sm overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3"
-        style={{ borderLeftWidth: 3, borderLeftColor: color }}>
+      <div
+        className="flex items-center justify-between border-b border-gray-100 px-5 py-3"
+        style={{ borderLeftWidth: 3, borderLeftColor: color }}
+      >
         <div className="flex items-center gap-2">
-          <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+          <svg
+            className="h-4 w-4 text-gray-400"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
+            />
           </svg>
           <span className="text-sm font-bold text-gray-900">Documents</span>
           {docs.length > 0 && (
@@ -141,19 +172,36 @@ export default function ManagerDocuments({
       <div className="border-b border-gray-50 px-5 py-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
           <div className="flex-1">
-            <label className="mb-1 block text-xs font-semibold text-gray-500">Note (optional)</label>
+            <label className="mb-1 block text-xs font-semibold text-gray-500">
+              Note (optional)
+            </label>
             <div className="flex items-center gap-1.5">
               {/* Pencil icon */}
               <div className="pointer-events-none flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-gray-50">
-                <svg className="h-3.5 w-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 012.828 2.828L11.828 15.828a2 2 0 01-1.414.586H8v-2.414a2 2 0 01.586-1.414z" />
+                <svg
+                  className="h-3.5 w-3.5 text-gray-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 012.828 2.828L11.828 15.828a2 2 0 01-1.414.586H8v-2.414a2 2 0 01.586-1.414z"
+                  />
                 </svg>
               </div>
               <input
                 type="text"
                 value={note}
-                onChange={(e) => { setNote(e.target.value); noteRef.current = e.target.value }}
-                onKeyDown={(e) => { if (e.key === 'Escape') setNote('') }}
+                onChange={(e) => {
+                  setNote(e.target.value)
+                  noteRef.current = e.target.value
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setNote('')
+                }}
                 placeholder="Add a note for this document…"
                 className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-400 focus:bg-white focus:outline-none transition-colors"
               />
@@ -161,11 +209,19 @@ export default function ManagerDocuments({
               {note.trim() && (
                 <button
                   type="button"
-                  onClick={() => {/* note is stored on upload — this just gives visual confirmation */}}
+                  onClick={() => {
+                    /* note is stored on upload — this just gives visual confirmation */
+                  }}
                   className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-green-200 bg-green-50 text-green-500 transition-colors hover:bg-green-100"
                   title="Note ready"
                 >
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <svg
+                    className="h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2.5}
+                  >
                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                   </svg>
                 </button>
@@ -180,15 +236,32 @@ export default function ManagerDocuments({
               {uploading ? (
                 <>
                   <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
                   </svg>
                   Uploading…
                 </>
               ) : (
                 <>
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                  <svg
+                    className="h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+                    />
                   </svg>
                   Attach File
                 </>
@@ -216,7 +289,10 @@ export default function ManagerDocuments({
       ) : (
         <ul className="divide-y divide-gray-50">
           {docs.map((doc) => (
-            <li key={doc.id} className="flex items-start gap-3 px-5 py-3.5 hover:bg-gray-50 transition-colors">
+            <li
+              key={doc.id}
+              className="flex items-start gap-3 px-5 py-3.5 hover:bg-gray-50 transition-colors"
+            >
               {/* Icon */}
               <span className="mt-0.5 text-xl leading-none">{fileIcon(doc.file_type)}</span>
 
@@ -232,14 +308,26 @@ export default function ManagerDocuments({
                   >
                     {doc.file_name}
                   </a>
-                  <span className="shrink-0 text-xs text-gray-400">{fmtSize(doc.file_size)}</span>
+                  <span className="shrink-0 text-xs text-gray-400">
+                    {fmtSize(doc.file_size)}
+                  </span>
                 </div>
 
                 {/* Note */}
                 {doc.note && (
                   <div className="mt-1 flex items-start gap-1.5">
-                    <svg className="mt-0.5 h-3 w-3 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 012.828 2.828L11.828 15.828a2 2 0 01-1.414.586H8v-2.414a2 2 0 01.586-1.414z" />
+                    <svg
+                      className="mt-0.5 h-3 w-3 shrink-0 text-gray-400"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 012.828 2.828L11.828 15.828a2 2 0 01-1.414.586H8v-2.414a2 2 0 01.586-1.414z"
+                      />
                     </svg>
                     <p className="text-xs text-gray-700">{doc.note}</p>
                   </div>
@@ -247,12 +335,26 @@ export default function ManagerDocuments({
 
                 {/* Timestamp + uploader */}
                 <div className="mt-1 flex items-center gap-1.5">
-                  <svg className="h-3 w-3 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  <svg
+                    className="h-3 w-3 shrink-0 text-gray-400"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
                   </svg>
-                  <span className="text-xs font-medium text-gray-500">{fmtDate(doc.created_at)}</span>
+                  <span className="text-xs font-medium text-gray-500">
+                    {fmtDate(doc.created_at)}
+                  </span>
                   {doc.uploaded_by && (
-                    <span className="text-xs text-gray-400">· by <span className="font-medium text-gray-500">{doc.uploaded_by}</span></span>
+                    <span className="text-xs text-gray-400">
+                      · by <span className="font-medium text-gray-500">{doc.uploaded_by}</span>
+                    </span>
                   )}
                 </div>
               </div>
@@ -266,12 +368,29 @@ export default function ManagerDocuments({
               >
                 {deleting === doc.id ? (
                   <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
                   </svg>
                 ) : (
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  <svg
+                    className="h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                    />
                   </svg>
                 )}
               </button>
