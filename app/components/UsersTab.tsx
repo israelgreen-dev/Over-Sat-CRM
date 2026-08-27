@@ -1,7 +1,93 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
+
+/** Random strong password — unambiguous characters only (no O/0, l/1). */
+function generatePassword(length = 12): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%&*'
+  const values = new Uint32Array(length)
+  crypto.getRandomValues(values)
+  return Array.from(values, (v) => chars[v % chars.length]).join('')
+}
+
+/**
+ * Password input with show/hide eye, one-click generator, and copy.
+ * Passwords are stored as one-way hashes and can never be read back — this
+ * lets the admin SEE the password at the moment they set it, which is the
+ * only time it exists in the clear.
+ */
+function PasswordField({
+  value,
+  onChange,
+  placeholder = 'Min. 8 characters',
+  className = '',
+}: {
+  value: string
+  onChange: (v: string) => void
+  placeholder?: string
+  className?: string
+}) {
+  const [visible, setVisible] = useState(false)
+  const [copied, setCopied]   = useState(false)
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch { /* clipboard unavailable — user can select the visible text */ }
+  }
+
+  return (
+    <div className={`flex items-center gap-1.5 ${className}`}>
+      <div className="relative flex-1">
+        <input
+          type={visible ? 'text' : 'password'}
+          className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 pr-9 text-sm text-gray-900 focus:border-blue-400 focus:bg-white focus:outline-none transition-colors"
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
+        <button
+          type="button"
+          onClick={() => setVisible((v) => !v)}
+          title={visible ? 'Hide password' : 'Show password'}
+          className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-gray-400 hover:text-gray-600"
+        >
+          {visible ? (
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+            </svg>
+          ) : (
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+          )}
+        </button>
+      </div>
+      <button
+        type="button"
+        onClick={() => { onChange(generatePassword()); setVisible(true) }}
+        title="Generate a strong password"
+        className="shrink-0 rounded-xl border border-gray-200 px-2.5 py-2 text-xs font-medium text-gray-500 hover:bg-gray-50"
+      >
+        Generate
+      </button>
+      {value && (
+        <button
+          type="button"
+          onClick={copy}
+          title="Copy password"
+          className={`shrink-0 rounded-xl border px-2.5 py-2 text-xs font-medium ${copied ? 'border-emerald-200 bg-emerald-50 text-emerald-600' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+        >
+          {copied ? 'Copied ✓' : 'Copy'}
+        </button>
+      )}
+    </div>
+  )
+}
 
 type User = {
   id: string
@@ -225,15 +311,23 @@ export default function UsersTab({
   const [noServiceKey, setNoServiceKey] = useState(false)
 
   const [form, setForm] = useState({ email: '', password: '', name: '', role: 'manager' as User['role'] })
-  // Direction the next click of the sort button will apply (toggles each click).
+
+  // Sorting: click a column header (Name / Email / Role) to sort, click again
+  // to flip direction. null = original order (as returned by the API).
+  type SortKey = 'name' | 'email' | 'role'
+  const [sortKey, setSortKey] = useState<SortKey | null>(null)
   const [sortAsc, setSortAsc] = useState(true)
 
-  function toggleSort() {
-    setUsers((prev) => [...prev].sort((a, b) => sortAsc
-      ? (a.name || '').localeCompare(b.name || '')
-      : (b.name || '').localeCompare(a.name || '')))
-    setSortAsc((v) => !v)
+  function sortBy(key: SortKey) {
+    if (sortKey === key) setSortAsc((v) => !v)
+    else { setSortKey(key); setSortAsc(true) }
   }
+
+  const sortedUsers = useMemo(() => {
+    if (!sortKey) return users
+    const val = (u: User) => (sortKey === 'role' ? (ROLE_LABELS[u.role] ?? u.role ?? '') : (u[sortKey] ?? ''))
+    return [...users].sort((a, b) => (sortAsc ? 1 : -1) * val(a).localeCompare(val(b)))
+  }, [users, sortKey, sortAsc])
   const [resetUserId, setResetUserId]   = useState<string | null>(null)
   const [sentResetIds, setSentResetIds] = useState<Set<string>>(new Set())
   const [sentInviteIds, setSentInviteIds] = useState<Set<string>>(new Set())
@@ -376,16 +470,16 @@ export default function UsersTab({
         <div className="flex items-center gap-2">
           {users.length > 1 && (
             <button
-              onClick={toggleSort}
-              title={sortAsc ? 'Sort A–Z' : 'Sort Z–A'}
+              onClick={() => sortBy('name')}
+              title="Sort by name"
               className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
             >
               <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                {sortAsc
-                  ? <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h13M3 8h9M3 12h5m4 6l3 3m0 0l3-3m-3 3V4" />
-                  : <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h5M3 8h9M3 12h13m4-8l3-3m0 0l3 3m-3-3v18" />}
+                {sortKey === 'name' && !sortAsc
+                  ? <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h5M3 8h9M3 12h13m4-8l3-3m0 0l3 3m-3-3v18" />
+                  : <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h13M3 8h9M3 12h5m4 6l3 3m0 0l3-3m-3 3V4" />}
               </svg>
-              {sortAsc ? 'A–Z' : 'Z–A'}
+              {sortKey === 'name' && !sortAsc ? 'Z–A' : 'A–Z'}
             </button>
           )}
           <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">
@@ -445,7 +539,8 @@ export default function UsersTab({
             </div>
             <div>
               <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Password</label>
-              <input type="password" className={inputCls} placeholder="Min. 8 characters" value={form.password} onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} />
+              <PasswordField value={form.password} onChange={(password) => setForm((f) => ({ ...f, password }))} />
+              <p className="mt-1 text-[11px] text-gray-400">Passwords are stored encrypted and can't be viewed later — copy it now if you plan to share it.</p>
             </div>
           </div>
           <div className="mt-4 flex items-center justify-between">
@@ -474,13 +569,32 @@ export default function UsersTab({
           <table className="min-w-full divide-y divide-gray-100 text-sm">
             <thead className="bg-gray-50">
               <tr>
-                {['Name', 'Email', 'Role', 'Color & Territory', 'Actions'].map((h) => (
-                  <th key={h} className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-400">{h}</th>
+                {([
+                  { label: 'Name',  key: 'name'  as const },
+                  { label: 'Email', key: 'email' as const },
+                  { label: 'Role',  key: 'role'  as const },
+                  { label: 'Color & Territory', key: null },
+                  { label: 'Actions', key: null },
+                ]).map(({ label, key }) => (
+                  <th key={label} className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-400">
+                    {key ? (
+                      <button
+                        onClick={() => sortBy(key)}
+                        title={`Sort by ${label.toLowerCase()}`}
+                        className="flex items-center gap-1 uppercase tracking-wider transition-colors hover:text-gray-700"
+                      >
+                        {label}
+                        <span className={sortKey === key ? 'text-blue-500' : 'text-gray-300'}>
+                          {sortKey === key ? (sortAsc ? '▲' : '▼') : '↕'}
+                        </span>
+                      </button>
+                    ) : label}
+                  </th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {users.map((u) => (
+              {sortedUsers.map((u) => (
                 <tr key={u.id} className={u.id === currentUserId ? 'bg-blue-50' : ''}>
                   <td className="px-5 py-3 font-medium text-gray-900">
                     {editingId === u.id ? (
@@ -618,13 +732,10 @@ function EditRow({ user, onSave, onCancel, busy }: { user: User; onSave: (u: { n
         </button>
       </div>
       {showPw && (
-        <input
-          type="password"
-          placeholder="New password (min. 8 chars)"
-          className="rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:border-blue-400 w-64"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
+        <div className="w-96 max-w-full">
+          <PasswordField value={password} onChange={setPassword} placeholder="New password (min. 8 chars)" />
+          <p className="mt-1 text-[11px] text-gray-400">Current passwords are stored encrypted and can't be viewed — set a new one here and copy it to share.</p>
+        </div>
       )}
       {dualEligible && (
         <label className="flex w-fit cursor-pointer items-center gap-2 rounded-lg bg-blue-50 px-2.5 py-1.5">
