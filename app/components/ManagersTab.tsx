@@ -46,16 +46,13 @@ export default function ManagersTab({
     // All sums converted to USD so mixed-currency deals aggregate correctly.
     const forecast = opps
       .filter((o) => o.stage !== 'Loss')
-      .reduce((s, o) => s + toUSD(o.value ?? 0, (o as any).currency), 0)
+      .reduce((s, o) => s + toUSD(o.value ?? 0, o.currency), 0)
     const closed = opps
       .filter((o) => o.stage === 'Win')
-      .reduce(
-        (s, o) => s + toUSD((o as any).final_win_value ?? o.value ?? 0, (o as any).currency),
-        0,
-      )
+      .reduce((s, o) => s + toUSD(o.final_win_value ?? o.value ?? 0, o.currency), 0)
     const open = opps
       .filter((o) => !['Win', 'Loss'].includes(o.stage))
-      .reduce((s, o) => s + toUSD(o.value ?? 0, (o as any).currency), 0)
+      .reduce((s, o) => s + toUSD(o.value ?? 0, o.currency), 0)
     const target = managerTargets[name] ?? 0
     const pct = target > 0 ? Math.min(Math.round((closed / target) * 100), 999) : 0
     const topDeals = [...opps].sort((a, b) => (b.value ?? 0) - (a.value ?? 0)).slice(0, 3)
@@ -238,9 +235,9 @@ function ManagerDrillDown({
                   </td>
                   <td className="px-4 py-3 text-gray-600">{(o.product as string) ?? '—'}</td>
                   <td className="px-4 py-3 text-right font-bold text-gray-900">
-                    {fmtUSD(o.value ?? 0, (o as any).currency)}
+                    {fmtUSD(o.value ?? 0, o.currency)}
                   </td>
-                  <td className="px-4 py-3 text-gray-500">{(o as any).close_date ?? '—'}</td>
+                  <td className="px-4 py-3 text-gray-500">{o.close_date ?? '—'}</td>
                 </tr>
               ))}
             </tbody>
@@ -346,7 +343,7 @@ function ManagerCard({
                     </span>
                   </div>
                   <span className="shrink-0 text-xs font-bold text-gray-900">
-                    {fmtUSD(deal.value ?? 0, (deal as any).currency)}
+                    {fmtUSD(deal.value ?? 0, deal.currency)}
                   </span>
                 </li>
               ))}

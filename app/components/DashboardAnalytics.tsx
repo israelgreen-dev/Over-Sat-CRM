@@ -81,12 +81,12 @@ function DashboardAnalytics({
         // Forecast excludes lost deals so marking a deal as Loss is reflected here.
         const forecast = opps
           .filter((o) => o.stage !== 'Loss')
-          .reduce((s, o) => s + toUSD(o.value ?? 0, (o as any).currency), 0)
+          .reduce((s, o) => s + toUSD(o.value ?? 0, o.currency), 0)
         const closed = opps
           .filter((o) => o.stage === 'Win')
           .reduce(
             (s, o) =>
-              s + toUSD((o as any).final_win_value || o.value || 0, (o as any).currency),
+              s + toUSD(o.final_win_value || o.value || 0, o.currency),
             0,
           )
         const target = managerTargets[name] ?? 0
@@ -103,7 +103,7 @@ function DashboardAnalytics({
     const closedValue = opportunities
       .filter((o) => o.stage === 'Win')
       .reduce(
-        (s, o) => s + toUSD((o as any).final_win_value || o.value || 0, (o as any).currency),
+        (s, o) => s + toUSD(o.final_win_value || o.value || 0, o.currency),
         0,
       )
     return {
@@ -124,8 +124,8 @@ function DashboardAnalytics({
           (s, o) =>
             s +
             toUSD(
-              stage === 'Win' ? (o as any).final_win_value || o.value || 0 : (o.value ?? 0),
-              (o as any).currency,
+              stage === 'Win' ? o.final_win_value || o.value || 0 : (o.value ?? 0),
+              o.currency,
             ),
           0,
         )
@@ -457,7 +457,7 @@ function DashboardAnalytics({
                   </div>
                   <span className="shrink-0 tabular-nums text-sm font-bold text-green-600">
                     {fmtFull(
-                      toUSD((o as any).final_win_value || o.value || 0, (o as any).currency),
+                      toUSD(o.final_win_value || o.value || 0, o.currency),
                     )}
                   </span>
                 </div>

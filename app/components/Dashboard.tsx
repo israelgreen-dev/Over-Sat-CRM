@@ -1,7 +1,9 @@
 'use client'
 
+import Image from 'next/image'
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
+import { fetchAllRows } from '@/lib/fetch-all'
 import { toUSD } from '@/lib/currency'
 import { type Opportunity, DEFAULT_PROBABILITY } from './OpportunitiesTable'
 import DashboardAnalytics, { MANAGER_TARGETS } from './DashboardAnalytics'
@@ -194,16 +196,12 @@ export default function Dashboard() {
     let cancelled = false
     setOppsLoading(true)
     setOppsError(null)
-    supabase
-      .from('opportunities')
-      .select('*')
-      .order('name', { ascending: true })
-      .then(({ data, error }) => {
-        if (cancelled) return
-        if (error) setOppsError(error.message)
-        else setLiveOpps((data ?? []) as Opportunity[])
-        setOppsLoading(false)
-      })
+    fetchAllRows<Opportunity>('opportunities', 'name').then(({ data, error }) => {
+      if (cancelled) return
+      if (error) setOppsError(error.message)
+      else setLiveOpps(data ?? [])
+      setOppsLoading(false)
+    })
     return () => {
       cancelled = true
     }
@@ -215,16 +213,15 @@ export default function Dashboard() {
   const [leadsError, setLeadsError] = useState<string | null>(null)
 
   const reloadLeads = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('leads')
-      .select('*')
-      .order('updated_at', { ascending: false })
+    const { data, error } = await fetchAllRows<Lead>('leads', 'updated_at', {
+      ascending: false,
+    })
     if (error) {
       setLeadsError(error.message)
       setLeads([])
     } else {
       setLeadsError(null)
-      setLeads((data ?? []) as Lead[])
+      setLeads(data ?? [])
     }
     setLeadsLoading(false)
   }, [])
@@ -527,7 +524,7 @@ export default function Dashboard() {
     const yearsFromData = Array.from(
       new Set(
         liveOpps
-          .map((o) => ((o as any).close_date ?? '').match(/\d{4}/)?.[0])
+          .map((o) => (o.close_date ?? '').match(/\d{4}/)?.[0])
           .filter(Boolean) as string[],
       ),
     )
@@ -615,7 +612,7 @@ export default function Dashboard() {
     () =>
       liveOpps.filter((o) => {
         if (selectedYear === ALL_YEARS) return true
-        const cd = (o as any).close_date ?? ''
+        const cd = o.close_date ?? ''
         return !cd || cd.includes(selectedYear)
       }),
     [liveOpps, selectedYear],
@@ -670,16 +667,13 @@ export default function Dashboard() {
     () => ({
       totalForecast: visibleOpps
         .filter((o) => o.stage !== 'Loss')
-        .reduce((s, o) => s + toUSD(o.value ?? 0, (o as any).currency), 0),
+        .reduce((s, o) => s + toUSD(o.value ?? 0, o.currency), 0),
       closedOrders: visibleOpps
         .filter((o) => o.stage === 'Win')
-        .reduce(
-          (s, o) => s + toUSD((o as any).final_win_value || o.value || 0, (o as any).currency),
-          0,
-        ),
+        .reduce((s, o) => s + toUSD(o.final_win_value || o.value || 0, o.currency), 0),
       openPipeline: visibleOpps
         .filter((o) => !['Win', 'Loss'].includes(o.stage))
-        .reduce((s, o) => s + toUSD(o.value ?? 0, (o as any).currency), 0),
+        .reduce((s, o) => s + toUSD(o.value ?? 0, o.currency), 0),
     }),
     [visibleOpps],
   )
@@ -756,9 +750,12 @@ export default function Dashboard() {
         <div className="print-only hidden border-b-2 border-gray-200 pb-4 mb-5 px-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <img
+              <Image
                 src="/OS-Logo.png"
                 alt="Over-Sat Logo"
+                width={269}
+                height={64}
+                priority
                 style={{ height: 40, width: 'auto', objectFit: 'contain' }}
               />
               <div className="border-l border-gray-300 pl-4">
@@ -791,9 +788,11 @@ export default function Dashboard() {
               className="flex items-center gap-3 transition-opacity hover:opacity-75"
             >
               <div className="flex h-10 w-36 shrink-0 items-center overflow-hidden">
-                <img
+                <Image
                   src="/OS-Logo.png"
                   alt="Over-Sat Logo"
+                  width={269}
+                  height={64}
                   className="h-full w-full object-contain"
                 />
               </div>
@@ -1341,15 +1340,15 @@ function exportCSV(opportunities: Opportunity[]) {
     (o.status as string) ?? '',
     (o.product as string) ?? '',
     (o.country as string) ?? '',
-    (o as any).close_date ?? '',
-    (o as any).currency ?? 'USD',
+    o.close_date ?? '',
+    o.currency ?? 'USD',
     o.value ?? '',
-    o.value != null ? Math.round(toUSD(o.value, (o as any).currency)) : '',
-    (o as any).probability ?? '',
-    (o as any).final_win_value ?? '',
+    o.value != null ? Math.round(toUSD(o.value, o.currency)) : '',
+    o.probability ?? '',
+    o.final_win_value ?? '',
     o.loss_reason ?? '',
     o.loss_description ?? '',
-    (o as any).updated_at ?? (o as any).created_at ?? '',
+    o.updated_at ?? o.created_at ?? '',
   ])
   const csv = [headers, ...rows]
     .map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','))

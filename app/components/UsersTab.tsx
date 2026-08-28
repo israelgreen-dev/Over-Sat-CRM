@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 
@@ -177,7 +178,7 @@ function InvitePreview({
         {/* Brand header */}
         <div className="mb-6 flex items-center gap-3 border-b border-gray-100 pb-5">
           <div className="flex h-10 w-36 items-center overflow-hidden rounded-lg">
-            <img src="/OS-Logo.png" alt="Over-Sat" className="h-full w-full object-contain" />
+            <Image src="/OS-Logo.png" alt="Over-Sat" width={269} height={64} className="h-full w-full object-contain" />
           </div>
           <div className="border-l border-gray-200 pl-3">
             <p className="text-xs font-bold uppercase tracking-widest text-gray-400">

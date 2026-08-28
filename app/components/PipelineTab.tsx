@@ -25,7 +25,7 @@ const STAGE_COLORS: Record<string, string> = {
 // tracks stage_changed_at; older rows fall back to created_at).
 function daysInStage(o: Opportunity): number | null {
   if (['Win', 'Loss'].includes(o.stage)) return null
-  const ts = (o as any).stage_changed_at ?? (o as any).created_at
+  const ts = o.stage_changed_at ?? o.created_at
   if (!ts) return null
   const d = new Date(String(ts))
   if (Number.isNaN(d.getTime())) return null
@@ -36,7 +36,7 @@ const STALE_DAYS = 60
 // An open deal whose expected close quarter ("Qn-YYYY") has already passed.
 function isOverdue(o: Opportunity): boolean {
   if (['Win', 'Loss'].includes(o.stage)) return false
-  const m = String((o as any).close_date ?? '').match(/Q([1-4])-(\d{4})/)
+  const m = String(o.close_date ?? '').match(/Q([1-4])-(\d{4})/)
   if (!m) return false
   const now = new Date()
   const nowKey = now.getFullYear() * 4 + Math.floor(now.getMonth() / 3) + 1
@@ -112,8 +112,8 @@ function sortRows(
   numeric: boolean,
 ): Opportunity[] {
   return [...rows].sort((a, b) => {
-    const av = (a as any)[key]
-    const bv = (b as any)[key]
+    const av = a[key as keyof Opportunity]
+    const bv = b[key as keyof Opportunity]
     if (av == null && bv == null) return 0
     if (av == null) return 1
     if (bv == null) return -1
@@ -174,7 +174,7 @@ export default function PipelineTab({
   )
   const stageOptions = Object.keys(STAGE_COLORS)
   const statusOptions = Array.from(
-    new Set(opportunities.map((r) => (r as any).status ?? '').filter(Boolean)),
+    new Set(opportunities.map((r) => r.status ?? '').filter(Boolean)),
   ).sort()
 
   const anyFilterActive = !!(
@@ -221,7 +221,7 @@ export default function PipelineTab({
     )
       return false
     if (filterStage && r.stage?.toLowerCase() !== filterStage.toLowerCase()) return false
-    if (filterStatus && ((r as any).status ?? '')?.toLowerCase() !== filterStatus.toLowerCase())
+    if (filterStatus && (r.status ?? '')?.toLowerCase() !== filterStatus.toLowerCase())
       return false
     return true
   })
@@ -272,7 +272,7 @@ export default function PipelineTab({
       Stage: opp.stage ?? '',
       Value:
         opp.value != null
-          ? `${(opp as any).currency ?? 'USD'} ${Number(opp.value).toLocaleString('en-US')}`
+          ? `${opp.currency ?? 'USD'} ${Number(opp.value).toLocaleString('en-US')}`
           : '',
     })
     if (selected?.id === opp.id) setSelected(null)
@@ -557,19 +557,19 @@ export default function PipelineTab({
                   </td>
                   {/* Value */}
                   <td className="whitespace-nowrap px-4 py-3 font-semibold tabular-nums text-gray-900">
-                    {opp.value != null ? fmtUSD(opp.value, (opp as any).currency) : '—'}
+                    {opp.value != null ? fmtUSD(opp.value, opp.currency) : '—'}
                   </td>
                   {/* Probability */}
                   <td className="whitespace-nowrap px-4 py-3 text-center tabular-nums text-blue-600 font-medium">
                     {effectiveProbability(opp, probabilityDefaults)}%
-                    {(opp as any).probability == null && (
+                    {opp.probability == null && (
                       <span className="ml-1 text-[10px] text-gray-400">(def)</span>
                     )}
                   </td>
                   {/* Weighted Value */}
                   <td className="whitespace-nowrap px-4 py-3 font-semibold tabular-nums text-indigo-600">
                     {opp.value != null
-                      ? fmtUSD(weightedValue(opp, probabilityDefaults), (opp as any).currency)
+                      ? fmtUSD(weightedValue(opp, probabilityDefaults), opp.currency)
                       : '—'}
                   </td>
                   {/* Stage */}
@@ -596,7 +596,7 @@ export default function PipelineTab({
                   </td>
                   {/* Close Date */}
                   <td className="whitespace-nowrap px-4 py-3 text-gray-600">
-                    {(opp as any).close_date ?? '—'}
+                    {opp.close_date ?? '—'}
                     {isOverdue(opp) && (
                       <span
                         className="ml-1.5 inline-flex items-center rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-600"
@@ -608,18 +608,18 @@ export default function PipelineTab({
                   </td>
                   {/* Status */}
                   <td className="whitespace-nowrap px-4 py-3 text-gray-600">
-                    {(opp as any).status ?? '—'}
+                    {opp.status ?? '—'}
                   </td>
                   {/* Last updated (falls back to created date for old rows) */}
                   <td
                     className="whitespace-nowrap px-4 py-3 text-xs text-gray-400"
                     title={
-                      (opp as any).updated_at
-                        ? `Last updated ${new Date(String((opp as any).updated_at)).toLocaleString()}`
+                      opp.updated_at
+                        ? `Last updated ${new Date(String(opp.updated_at)).toLocaleString()}`
                         : undefined
                     }
                   >
-                    {fmtUpdated((opp as any).updated_at ?? (opp as any).created_at)}
+                    {fmtUpdated(opp.updated_at ?? opp.created_at)}
                   </td>
                   {/* Actions — delete */}
                   {canDelete && (

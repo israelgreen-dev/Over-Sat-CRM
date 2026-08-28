@@ -152,6 +152,10 @@ stay dormant until the migration runs).
 
 ## Backup & restore
 
+- **Full data dump:** `npm run backup` writes every table + auth users as JSON
+  to `../Over-Sat CRM Backups/backup-<timestamp>/` (newest 14 kept). Run it
+  before risky changes; schedule it (e.g. Windows Task Scheduler) for a daily
+  safety net on top of Supabase backups.
 - **Database:** Supabase Dashboard → Database → Backups (verify schedule; take
   a manual export before risky changes). Schema is reproducible from
   `supabase/migrations/`.

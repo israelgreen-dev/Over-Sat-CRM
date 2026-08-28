@@ -437,7 +437,7 @@ export default function LeadsTab({
       source: converting.source || null,
       priority: converting.priority || null,
     }
-    let data: any[] | null = null
+    let data: Opportunity[] | null = null
     let error: { message: string } | null = null
     for (let attempt = 0; attempt < 5; attempt++) {
       const res = await supabase.from('opportunities').insert([oppPayload]).select()

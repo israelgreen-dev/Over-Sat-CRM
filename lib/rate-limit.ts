@@ -31,6 +31,6 @@ export function rateLimit(key: string, maxPerMin = 20): boolean {
 
 /** Extract caller IP from standard proxy headers. */
 export function callerIp(req: Request): string {
-  const fwd = (req as any).headers?.get?.('x-forwarded-for') as string | null
+  const fwd = req.headers.get('x-forwarded-for')
   return fwd?.split(',')[0]?.trim() ?? 'unknown'
 }

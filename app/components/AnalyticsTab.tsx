@@ -38,7 +38,7 @@ function fmtFull(n: number) {
   }).format(n)
 }
 function winVal(o: Opportunity) {
-  return (o as any).final_win_value || o.value || 0
+  return o.final_win_value || o.value || 0
 }
 // close_date is stored as a quarter string ("Q1-2026"), not a calendar date.
 // Parse the quarter label from it, falling back to a real date if one is given.
@@ -165,9 +165,9 @@ export default function AnalyticsTab({
   const opps = useMemo(() => {
     if (!selectedQuarter) return opportunities
     if (selectedQuarter === 'No Date') {
-      return opportunities.filter((o) => !(o as any).close_date)
+      return opportunities.filter((o) => !o.close_date)
     }
-    return opportunities.filter((o) => quarterLabel((o as any).close_date) === selectedQuarter)
+    return opportunities.filter((o) => quarterLabel(o.close_date) === selectedQuarter)
   }, [opportunities, selectedQuarter])
   const wins = opps.filter((o) => o.stage === 'Win')
   const losses = opps.filter((o) => o.stage === 'Loss')
@@ -260,7 +260,7 @@ export default function AnalyticsTab({
   // Country
   const cntryMap: Record<string, { count: number; value: number; wins: number }> = {}
   opps.forEach((o) => {
-    const c = (o as any).country || 'Unknown'
+    const c = o.country || 'Unknown'
     if (!cntryMap[c]) cntryMap[c] = { count: 0, value: 0, wins: 0 }
     cntryMap[c].count++
     cntryMap[c].value += pipeVal(o)
@@ -274,7 +274,7 @@ export default function AnalyticsTab({
   // Quarterly
   const qtrMap: Record<string, { pipeline: number; win: number; count: number }> = {}
   opps.forEach((o) => {
-    const q = (o as any).close_date || 'No Date'
+    const q = o.close_date || 'No Date'
     if (!qtrMap[q]) qtrMap[q] = { pipeline: 0, win: 0, count: 0 }
     qtrMap[q].count++
     if (o.stage !== 'Loss') qtrMap[q].pipeline += pipeVal(o) // lost deals leave the pipeline
@@ -287,7 +287,7 @@ export default function AnalyticsTab({
   // Status
   const statusMap: Record<string, number> = {}
   active.forEach((o) => {
-    const s = (o as any).status || 'No Status'
+    const s = o.status || 'No Status'
     statusMap[s] = (statusMap[s] ?? 0) + 1
   })
   const statusData = Object.entries(statusMap)
@@ -346,7 +346,7 @@ export default function AnalyticsTab({
   })
   const qActual: Record<string, number> = { Q1: 0, Q2: 0, Q3: 0, Q4: 0, 'No Date': 0 }
   wins.forEach((o) => {
-    const ql = quarterLabel((o as any).close_date)
+    const ql = quarterLabel(o.close_date)
     qActual[ql ?? 'No Date'] += winVal(o)
   })
   const planVsActualByQuarter = ['Q1', 'Q2', 'Q3', 'Q4', 'No Date'].map((label) => ({
@@ -1307,12 +1307,31 @@ function SalesFunnel({
 }) {
   const total = data.reduce((s, d) => s + d.count, 0)
 
-  const renderLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, name, count }: any) => {
-    if (count === 0) return null
+  // Recharts passes label geometry as string | number; coerce before math.
+  type PieLabelProps = {
+    cx?: string | number
+    cy?: string | number
+    midAngle?: string | number
+    innerRadius?: string | number
+    outerRadius?: string | number
+    name?: string | number
+    count?: number
+  }
+  const renderLabel = ({
+    cx,
+    cy,
+    midAngle,
+    innerRadius,
+    outerRadius,
+    name,
+    count,
+  }: PieLabelProps) => {
+    if (!count) return null
     const RADIAN = Math.PI / 180
-    const radius = innerRadius + (outerRadius - innerRadius) * 0.5
-    const x = cx + radius * Math.cos(-midAngle * RADIAN)
-    const y = cy + radius * Math.sin(-midAngle * RADIAN)
+    const inner = Number(innerRadius)
+    const radius = inner + (Number(outerRadius) - inner) * 0.5
+    const x = Number(cx) + radius * Math.cos(-Number(midAngle) * RADIAN)
+    const y = Number(cy) + radius * Math.sin(-Number(midAngle) * RADIAN)
     return (
       <text
         x={x}
@@ -1348,7 +1367,7 @@ function SalesFunnel({
                 <Cell key={d.stage} fill={d.fill} />
               ))}
             </Pie>
-            <Tooltip formatter={(v: any, name: any) => [`${v} deals`, name]} />
+            <Tooltip formatter={(v, name) => [`${v} deals`, String(name)]} />
           </PieChart>
         </ResponsiveContainer>
       </div>

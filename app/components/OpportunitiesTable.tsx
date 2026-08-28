@@ -14,7 +14,23 @@ export type Opportunity = {
   value: number | null
   loss_reason: string | null
   loss_description: string | null
-  [key: string]: unknown
+  // Columns added by later migrations (004, 006, 008, 009, 013). All optional
+  // because rows created before each migration may return them as null/absent.
+  status?: string | null
+  country?: string | null
+  opportunity_type?: string | null
+  website?: string | null
+  source?: string | null
+  priority?: string | null
+  currency?: string | null
+  close_date?: string | null
+  final_win_value?: number | null
+  probability?: number | null
+  product_lines?: ProductLine[] | null
+  quarterly_incomes?: Record<string, number> | null
+  created_at?: string | null
+  updated_at?: string | null
+  stage_changed_at?: string | null
 }
 
 type Draft = {
@@ -55,7 +71,7 @@ export function effectiveProbability(
   o: Opportunity,
   defaults: Record<string, number> = DEFAULT_PROBABILITY,
 ): number {
-  const p = (o as any).probability
+  const p = o.probability
   if (p !== null && p !== undefined) return Number(p)
   return defaults[o.stage] ?? 0
 }
@@ -90,10 +106,10 @@ export function linesTotal(lines: ProductLine[]): number {
 // Read product lines off an opportunity, synthesizing a single line from the
 // legacy `product` + `value` for opportunities saved before multi-product.
 export function getProductLines(opp: Opportunity): ProductLine[] {
-  const raw = (opp as any).product_lines
+  const raw = opp.product_lines
   if (Array.isArray(raw) && raw.length > 0) {
-    return raw.map((l: any) =>
-      newProductLine(l.product ?? '', Number(l.price) || 0, Number(l.quantity) || 1),
+    return raw.map((l) =>
+      newProductLine(l?.product ?? '', Number(l?.price) || 0, Number(l?.quantity) || 1),
     )
   }
   const p = (opp.product as string) ?? ''
@@ -664,7 +680,7 @@ export function Modal({
       Stage: opportunity.stage ?? '',
       Value:
         opportunity.value != null
-          ? `${(opportunity as any).currency ?? 'USD'} ${Number(opportunity.value).toLocaleString('en-US')}`
+          ? `${opportunity.currency ?? 'USD'} ${Number(opportunity.value).toLocaleString('en-US')}`
           : '',
     })
     onDeleted?.()
@@ -842,15 +858,15 @@ export function Modal({
             <div className="mt-1.5 flex items-center gap-2">
               <StageBadge stage={draft.stage} />
               {draft.status && <StatusBadge status={draft.status} />}
-              {(opportunity as any).created_at && (
+              {opportunity.created_at && (
                 <span className="text-xs text-zinc-400" title="Created">
-                  Created {formatTimestamp((opportunity as any).created_at)}
+                  Created {formatTimestamp(opportunity.created_at)}
                 </span>
               )}
-              {(opportunity as any).updated_at &&
-                (opportunity as any).updated_at !== (opportunity as any).created_at && (
+              {opportunity.updated_at &&
+                opportunity.updated_at !== opportunity.created_at && (
                   <span className="text-xs text-zinc-400" title="Last updated">
-                    · Updated {formatTimestamp((opportunity as any).updated_at)}
+                    · Updated {formatTimestamp(opportunity.updated_at)}
                   </span>
                 )}
             </div>
@@ -1401,7 +1417,7 @@ export function AddOpportunityModal({
 
     // Progressive fallback: strip columns that don't exist in older DB schemas.
     const payload: Record<string, unknown> = { ...base }
-    let data: any[] | null = null
+    let data: Opportunity[] | null = null
     let sbError: { message: string } | null = null
 
     for (let attempt = 0; attempt < 9; attempt++) {
@@ -1882,21 +1898,21 @@ function toDraft(opp: Opportunity): Draft {
     product: (opp.product as string) ?? '',
     product_lines: getProductLines(opp),
     country: (opp.country as string) ?? '',
-    opportunity_type: ((opp as any).opportunity_type as string) ?? '',
-    website: ((opp as any).website as string) ?? '',
-    source: ((opp as any).source as string) ?? '',
-    priority: ((opp as any).priority as string) ?? 'Medium',
-    close_date: (opp as any).close_date ?? '',
-    currency: (opp as any).currency ?? 'USD',
+    opportunity_type: (opp.opportunity_type as string) ?? '',
+    website: (opp.website as string) ?? '',
+    source: (opp.source as string) ?? '',
+    priority: (opp.priority as string) ?? 'Medium',
+    close_date: opp.close_date ?? '',
+    currency: opp.currency ?? 'USD',
     value: opp.value,
     final_win_value:
       opp.stage === 'Win'
-        ? (opp as any).final_win_value || opp.value || null
-        : ((opp as any).final_win_value ?? null),
+        ? opp.final_win_value || opp.value || null
+        : (opp.final_win_value ?? null),
     loss_reason: opp.loss_reason ?? '',
     loss_description: opp.loss_description ?? '',
-    probability: (opp as any).probability ?? null,
-    quarterly_incomes: ((opp as any).quarterly_incomes as Record<string, number>) ?? {},
+    probability: opp.probability ?? null,
+    quarterly_incomes: (opp.quarterly_incomes as Record<string, number>) ?? {},
   }
 }
 

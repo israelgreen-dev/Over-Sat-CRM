@@ -110,8 +110,8 @@ export default function ManagerDocuments({
       noteRef.current = ''
       if (fileRef.current) fileRef.current.value = ''
       await load()
-    } catch (err: any) {
-      setError(err.message ?? 'Upload failed')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed')
     } finally {
       setUploading(false)
     }

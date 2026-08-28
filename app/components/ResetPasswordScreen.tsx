@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 
@@ -43,9 +44,12 @@ export default function ResetPasswordScreen({ onDone }: { onDone: () => void }) 
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
           <div className="inline-flex h-14 w-52 items-center justify-center rounded-2xl bg-white mb-4 shadow-lg overflow-hidden px-4 py-2">
-            <img
+            <Image
               src="/OS-Logo.png"
               alt="Over-Sat Logo"
+              width={269}
+              height={64}
+              priority
               className="h-full w-full object-contain"
             />
           </div>
