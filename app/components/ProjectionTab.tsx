@@ -17,7 +17,7 @@ import {
   effectiveProbability,
   generateQuarters,
   getProductLines,
-} from './OpportunitiesTable'
+} from '@/lib/opportunity'
 
 // Chronological sort key for "Qn-YYYY" quarter labels.
 function quarterSortKey(q: string): number {

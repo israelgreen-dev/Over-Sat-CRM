@@ -12,7 +12,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts'
-import { type Opportunity } from './OpportunitiesTable'
+import { type Opportunity } from '@/lib/opportunity'
 import { type Lead } from './LeadsTab'
 
 // ── Constants ─────────────────────────────────────────────────────────────────

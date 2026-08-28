@@ -1,14 +1,13 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import { Modal, AddOpportunityModal } from './OpportunitiesTable'
 import {
   type Opportunity,
-  Modal,
-  AddOpportunityModal,
   effectiveProbability,
   weightedValue,
   getProductLines,
-} from './OpportunitiesTable'
+} from '@/lib/opportunity'
 import { fmtUSD } from '@/lib/currency'
 import { supabase } from '@/lib/supabase'
 import { notifyEvent } from '@/lib/notify'

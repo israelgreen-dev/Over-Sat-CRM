@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { type Opportunity } from './OpportunitiesTable'
+import { type Opportunity } from '@/lib/opportunity'
 import { type Lead } from './LeadsTab'
 import { MANAGER_TARGETS, MANAGER_COLORS } from './DashboardAnalytics'
 import ManagerDocuments from './ManagerDocuments'

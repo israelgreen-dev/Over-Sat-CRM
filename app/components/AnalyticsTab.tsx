@@ -21,7 +21,7 @@ import {
   effectiveProbability,
   getProductLines,
   lineTotal,
-} from './OpportunitiesTable'
+} from '@/lib/opportunity'
 import { type Lead } from './LeadsTab'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

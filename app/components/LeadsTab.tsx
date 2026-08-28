@@ -3,15 +3,15 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { notifyEvent } from '@/lib/notify'
+import { SearchableSelect } from './OpportunitiesTable'
 import {
   type Opportunity,
-  SearchableSelect,
   COUNTRIES,
   OPPORTUNITY_TYPES,
   LEAD_SOURCES,
   PRIORITIES,
   PRIORITY_ICONS,
-} from './OpportunitiesTable'
+} from '@/lib/opportunity'
 
 /**
  * LeadsTab — a lightweight pre-pipeline stage.
