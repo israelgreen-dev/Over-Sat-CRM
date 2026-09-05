@@ -1118,6 +1118,7 @@ export default function Dashboard() {
               managers={managers}
               managerColors={managerColors}
               leads={leadsError ? [] : visibleLeads}
+              onNavigate={(tab) => setActiveTab(tab)}
             />
           )}
 

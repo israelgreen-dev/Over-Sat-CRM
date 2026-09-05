@@ -170,5 +170,111 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // ── Follow-up reminders — one email per record owner ─────────────────────
+  // Every daily run: each Sales Manager (any user owning records) gets a list
+  // of THEIR leads/opportunities whose follow-up date is today or has passed.
+  // Independent of the Admin/HoS digest config above. Repeats daily until the
+  // follow-up is done, moved, or cleared — that persistence is the point.
+  results.follow_up_reminders = await sendFollowUpReminders(sb, now)
+
   return NextResponse.json({ results })
+}
+
+const esc = (s: unknown) =>
+  String(s ?? '').replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`)
+
+async function sendFollowUpReminders(
+  sb: ReturnType<typeof serviceClient>,
+  now: Date,
+): Promise<Record<string, string> | string> {
+  const todayISO = now.toISOString().slice(0, 10)
+  const [dueLeads, dueOpps] = await Promise.all([
+    sb
+      .from('leads')
+      .select('account, owner, follow_up_at, status')
+      .lte('follow_up_at', todayISO)
+      .limit(500),
+    sb
+      .from('opportunities')
+      .select('name, customer_name, owner, follow_up_at, stage')
+      .lte('follow_up_at', todayISO)
+      .limit(500),
+  ])
+  // Migration 017 not applied yet → the column doesn't exist; stay dormant.
+  if (dueLeads.error || dueOpps.error)
+    return (dueLeads.error ?? dueOpps.error)!.message
+
+  type DueItem = { kind: 'Lead' | 'Opportunity'; name: string; date: string }
+  const byOwner = new Map<string, DueItem[]>()
+  const add = (owner: string | null, item: DueItem) => {
+    if (!owner) return
+    byOwner.set(owner, [...(byOwner.get(owner) ?? []), item])
+  }
+  for (const l of dueLeads.data ?? []) {
+    if (['Dropped', 'Converted'].includes(l.status ?? 'New')) continue
+    add(l.owner, { kind: 'Lead', name: l.account ?? '—', date: l.follow_up_at })
+  }
+  for (const o of dueOpps.data ?? []) {
+    if (['Win', 'Loss'].includes(o.stage ?? '')) continue
+    add(o.owner, {
+      kind: 'Opportunity',
+      name: `${o.name ?? '—'}${o.customer_name ? ` (${o.customer_name})` : ''}`,
+      date: o.follow_up_at,
+    })
+  }
+  if (byOwner.size === 0) return 'none-due'
+
+  // Resolve owner display names to account emails (app_metadata.name).
+  const { data: usersData, error: usersError } = await sb.auth.admin.listUsers({
+    page: 1,
+    perPage: 1000,
+  })
+  if (usersError) return usersError.message
+  const emailByName = new Map<string, string>()
+  for (const u of usersData.users) {
+    const name = (u.app_metadata?.name as string) ?? (u.user_metadata?.name as string) ?? ''
+    if (name && u.email) emailByName.set(name, u.email)
+  }
+
+  const outcome: Record<string, string> = {}
+  for (const [owner, items] of byOwner) {
+    const email = emailByName.get(owner)
+    if (!email) {
+      outcome[owner] = 'no-account-email'
+      continue
+    }
+    items.sort((a, b) => a.date.localeCompare(b.date))
+    const overdueCount = items.filter((i) => i.date < todayISO).length
+    const rows = items
+      .slice(0, 30)
+      .map((i) => {
+        const days = Math.round(
+          (new Date(todayISO).getTime() - new Date(i.date).getTime()) / 86_400_000,
+        )
+        const when =
+          days > 0
+            ? `<span style="color:#dc2626;font-weight:bold">${days} day${days !== 1 ? 's' : ''} overdue</span>`
+            : `<span style="color:#d97706;font-weight:bold">due today</span>`
+        return `<li><strong>${esc(i.kind)}</strong> — ${esc(i.name)} · ${when}</li>`
+      })
+      .join('')
+    const body = emailShell(
+      `You have ${items.length} follow-up${items.length !== 1 ? 's' : ''} due`,
+      `<p style="margin:0 0 8px">Hi ${esc(owner)}, these need your attention:</p>
+       <ul style="margin:0;padding-left:18px">${rows}${items.length > 30 ? '<li>…and more</li>' : ''}</ul>
+       <p style="margin-top:12px"><a href="https://over-sat-crm.com" style="color:#f97316">Open the CRM →</a></p>
+       <p style="margin-top:8px;color:#9ca3af;font-size:12px">This reminder repeats daily until the follow-up date is updated or cleared.</p>`,
+    )
+    try {
+      const sent = await sendMail(
+        [email],
+        `[Over-Sat CRM] ${items.length} follow-up${items.length !== 1 ? 's' : ''} due${overdueCount > 0 ? ` (${overdueCount} overdue)` : ''}`,
+        body,
+      )
+      outcome[owner] = sent ? `sent:${items.length}` : 'send-skipped'
+    } catch (e) {
+      outcome[owner] = e instanceof Error ? e.message : 'send-failed'
+    }
+  }
+  return outcome
 }
