@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { notifyEvent } from '@/lib/notify'
 import { SearchableSelect } from './OpportunitiesTable'
+import FollowUpField, { FollowUpCell, followUpSortValue } from './FollowUpField'
 import {
   type Opportunity,
   COUNTRIES,
@@ -35,6 +36,7 @@ export type Lead = {
   opportunity_type: string | null
   priority: string | null
   website: string | null
+  follow_up_at: string | null
   converted_opportunity_id: string | null
   created_at: string
   updated_at: string
@@ -68,6 +70,7 @@ type LeadForm = {
   opportunity_type: string
   priority: string
   description: string
+  follow_up_at: string
 }
 
 const emptyForm = (owner: string): LeadForm => ({
@@ -85,6 +88,7 @@ const emptyForm = (owner: string): LeadForm => ({
   opportunity_type: '',
   priority: 'Medium',
   description: '',
+  follow_up_at: '',
 })
 
 const updatedFmt = new Intl.DateTimeFormat('en-GB', {
@@ -103,6 +107,7 @@ const LEAD_COLUMNS: { label: string; field: string }[] = [
   { label: 'Priority', field: 'priority' },
   { label: 'Status', field: 'status' },
   { label: 'Description', field: 'description' },
+  { label: 'Follow Up', field: 'follow_up_at' },
   { label: 'Updated', field: 'updated_at' },
   { label: 'Actions', field: '' },
 ]
@@ -110,6 +115,7 @@ const PRIORITY_RANK: Record<string, number> = { High: 0, Medium: 1, Low: 2 }
 
 function leadSortValue(l: Lead, field: string): string | number {
   if (field === 'updated_at') return new Date(l.updated_at).getTime()
+  if (field === 'follow_up_at') return followUpSortValue(l.follow_up_at)
   if (field === 'priority') return PRIORITY_RANK[l.priority ?? 'Medium'] ?? 1
   return String((l as Record<string, unknown>)[field] ?? '').toLowerCase()
 }
@@ -275,6 +281,7 @@ export default function LeadsTab({
       opportunity_type: lead.opportunity_type ?? '',
       priority: lead.priority ?? 'Medium',
       description: lead.description ?? '',
+      follow_up_at: lead.follow_up_at ?? '',
     })
     setFormError(null)
     setEditing(lead)
@@ -302,6 +309,7 @@ export default function LeadsTab({
       opportunity_type: form.opportunity_type,
       priority: form.priority,
       description: form.description.trim(),
+      follow_up_at: form.follow_up_at || null,
     }
     // Progressive fallback: strip columns that predate migration 011.
     let sbError: { message: string } | null = null
@@ -339,6 +347,10 @@ export default function LeadsTab({
         delete payload.priority
         continue
       }
+      if (error.message?.includes('follow_up_at')) {
+        delete payload.follow_up_at
+        continue
+      }
       break
     }
     setBusy(false)
@@ -360,6 +372,7 @@ export default function LeadsTab({
       'Opportunity Type': String(payload.opportunity_type ?? ''),
       Priority: String(payload.priority ?? ''),
       Description: String(payload.description ?? ''),
+      'Follow Up': String(payload.follow_up_at ?? ''),
     })
     setEditing(null)
     onReload()
@@ -436,6 +449,7 @@ export default function LeadsTab({
       website: converting.website || null,
       source: converting.source || null,
       priority: converting.priority || null,
+      follow_up_at: converting.follow_up_at || null,
     }
     let data: Opportunity[] | null = null
     let error: { message: string } | null = null
@@ -458,6 +472,10 @@ export default function LeadsTab({
       }
       if (res.error.message?.includes('priority')) {
         delete oppPayload.priority
+        continue
+      }
+      if (res.error.message?.includes('follow_up_at')) {
+        delete oppPayload.follow_up_at
         continue
       }
       break
@@ -901,6 +919,10 @@ export default function LeadsTab({
                     >
                       {lead.description || '—'}
                     </td>
+                    {/* Follow Up */}
+                    <td className="whitespace-nowrap px-4 py-3 text-xs">
+                      <FollowUpCell value={lead.follow_up_at} />
+                    </td>
                     {/* Updated */}
                     <td className="whitespace-nowrap px-4 py-3 text-xs text-gray-400">
                       {updatedFmt.format(new Date(lead.updated_at))}
@@ -1206,6 +1228,16 @@ export default function LeadsTab({
                       </option>
                     ))}
                   </select>
+                </div>
+                <div className="col-span-2">
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">
+                    Next Follow-up
+                  </label>
+                  <FollowUpField
+                    value={form.follow_up_at}
+                    onChange={(v) => setForm((f) => ({ ...f, follow_up_at: v }))}
+                    className={inputCls}
+                  />
                 </div>
                 <div className="col-span-2">
                   <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">

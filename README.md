@@ -140,6 +140,7 @@ Run in order in the Supabase SQL editor. All are idempotent (safe to re-run).
 | 014 | **Security:** names → `app_metadata`, ownership RLS rewrite |
 | 015 | Email notifications: settings column + lead audit trail |
 | 016 | Admin-set password vault (service-role-only table; admin-only viewing) |
+| 017 | Follow-up date on leads and opportunities |
 
 ## Deploying
 

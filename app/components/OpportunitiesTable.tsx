@@ -20,6 +20,7 @@ import {
   PRIORITY_ICONS,
   COUNTRIES,
 } from '@/lib/opportunity'
+import FollowUpField from './FollowUpField'
 
 type Draft = {
   name: string
@@ -37,6 +38,7 @@ type Draft = {
   currency: string
   value: number | null
   close_date: string
+  follow_up_at: string
   final_win_value: number | null
   loss_reason: string
   loss_description: string
@@ -380,6 +382,7 @@ export function Modal({
       priority: draft.priority || null,
       currency: draft.currency || 'USD',
       close_date: draft.close_date || null,
+      follow_up_at: draft.follow_up_at || null,
       value: dealValue,
       final_win_value: finalWinValue,
       loss_reason: isLost ? draft.loss_reason : null,
@@ -442,6 +445,10 @@ export function Modal({
         delete payload.currency
         continue
       }
+      if (error.message?.includes('follow_up_at')) {
+        delete payload.follow_up_at
+        continue
+      }
       break
     }
 
@@ -462,6 +469,7 @@ export function Modal({
           : '',
       Products: productSummary(cleanLines),
       'Close Date': draft.close_date,
+      'Follow Up': draft.follow_up_at,
       Country: draft.country,
       'Opportunity Type': draft.opportunity_type,
       Priority: draft.priority,
@@ -745,6 +753,14 @@ export function Modal({
                 </select>
               </Field>
 
+              <Field label="Next Follow-up">
+                <FollowUpField
+                  value={draft.follow_up_at}
+                  onChange={(v) => setDraft((d) => ({ ...d, follow_up_at: v }))}
+                  className={selectCls}
+                />
+              </Field>
+
               <Field label="Status">
                 <select
                   className={selectCls}
@@ -1019,6 +1035,7 @@ export function AddOpportunityModal({
     product: '',
     status: 'On Track',
     close_date: '',
+    follow_up_at: '',
     value: '',
     currency: 'USD',
     probability: null as number | null,
@@ -1068,6 +1085,7 @@ export function AddOpportunityModal({
       priority: form.priority || null,
       currency: form.currency || 'USD',
       close_date: form.close_date || null,
+      follow_up_at: form.follow_up_at || null,
       value: dealValue,
       probability: form.probability,
       loss_reason: null,
@@ -1114,6 +1132,10 @@ export function AddOpportunityModal({
         delete payload.currency
         continue
       }
+      if (res.error.message?.includes('follow_up_at')) {
+        delete payload.follow_up_at
+        continue
+      }
       break
     }
 
@@ -1152,6 +1174,7 @@ export function AddOpportunityModal({
           : '',
       Products: productSummary(cleanLines),
       'Close Date': form.close_date,
+      'Follow Up': form.follow_up_at,
       Country: form.country,
       'Opportunity Type': form.opportunity_type,
       Source: form.source,
@@ -1460,6 +1483,14 @@ export function AddOpportunityModal({
             </select>
           </Field>
 
+          <Field label="Next Follow-up">
+            <FollowUpField
+              value={form.follow_up_at}
+              onChange={(v) => setForm((f) => ({ ...f, follow_up_at: v }))}
+              className={selectCls}
+            />
+          </Field>
+
           <Field label="Status">
             <select
               className={selectCls}
@@ -1562,6 +1593,7 @@ function toDraft(opp: Opportunity): Draft {
     source: (opp.source as string) ?? '',
     priority: (opp.priority as string) ?? 'Medium',
     close_date: opp.close_date ?? '',
+    follow_up_at: opp.follow_up_at ?? '',
     currency: opp.currency ?? 'USD',
     value: opp.value,
     final_win_value:
@@ -1722,6 +1754,7 @@ const FIELD_LABELS: Record<string, string> = {
   country: 'Country',
   currency: 'Currency',
   close_date: 'Close Date',
+  follow_up_at: 'Follow Up',
   value: 'Value',
   final_win_value: 'Win Value',
   probability: 'Probability %',

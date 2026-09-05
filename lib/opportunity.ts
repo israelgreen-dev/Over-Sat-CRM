@@ -31,6 +31,8 @@ export type Opportunity = {
   created_at?: string | null
   updated_at?: string | null
   stage_changed_at?: string | null
+  /** Next follow-up date (yyyy-mm-dd), migration 017. */
+  follow_up_at?: string | null
 }
 
 // Default probability by stage (used when probability is not explicitly set).

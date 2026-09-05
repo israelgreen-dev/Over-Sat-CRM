@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { Modal, AddOpportunityModal } from './OpportunitiesTable'
+import { FollowUpCell } from './FollowUpField'
 import {
   type Opportunity,
   effectiveProbability,
@@ -54,6 +55,7 @@ const COLUMNS: { label: string; field: string; numeric?: boolean }[] = [
   { label: 'Weighted Value', field: '_weighted', numeric: true },
   { label: 'Stage', field: 'stage' },
   { label: 'Close Date', field: 'close_date' },
+  { label: 'Follow Up', field: 'follow_up_at' },
   { label: 'Status', field: 'status' },
   { label: 'Updated', field: 'updated_at' },
 ]
@@ -604,6 +606,10 @@ export default function PipelineTab({
                         Overdue
                       </span>
                     )}
+                  </td>
+                  {/* Follow Up */}
+                  <td className="whitespace-nowrap px-4 py-3 text-xs">
+                    <FollowUpCell value={opp.follow_up_at} />
                   </td>
                   {/* Status */}
                   <td className="whitespace-nowrap px-4 py-3 text-gray-600">
