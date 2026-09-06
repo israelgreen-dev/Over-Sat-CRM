@@ -30,6 +30,17 @@ export function followUpStatus(value: string | null | undefined): FollowUpStatus
   return value < today ? 'overdue' : value === today ? 'today' : 'upcoming'
 }
 
+/**
+ * Deviation from schedule in whole days: positive = days overdue,
+ * 0 = due today, negative = days until due. null when unset.
+ */
+export function followUpDaysLate(value: string | null | undefined): number | null {
+  if (!value) return null
+  const ms =
+    new Date(`${inDaysISO(0)}T00:00:00`).getTime() - new Date(`${value}T00:00:00`).getTime()
+  return Math.round(ms / 86_400_000)
+}
+
 const fmt = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })
 
 /** Compact date display ("12 Jun 26") for a yyyy-mm-dd value. */
@@ -40,26 +51,41 @@ export function fmtFollowUp(value: string | null | undefined): string {
   return Number.isNaN(d.getTime()) ? '—' : fmt.format(d)
 }
 
-const STATUS_CLASSES: Record<FollowUpStatus, string> = {
-  overdue: 'text-red-600 font-semibold',
-  today: 'text-amber-600 font-semibold',
-  upcoming: 'text-gray-600',
+/** Human wording for the schedule deviation ("3 days late", "due today"). */
+export function fmtDeviation(daysLate: number): string {
+  if (daysLate > 0) return `${daysLate} day${daysLate !== 1 ? 's' : ''} late`
+  if (daysLate === 0) return 'due today'
+  return `in ${-daysLate} day${daysLate !== -1 ? 's' : ''}`
 }
 
-const STATUS_TITLES: Record<FollowUpStatus, string> = {
-  overdue: 'Follow-up is overdue',
-  today: 'Follow up today',
-  upcoming: 'Next follow-up',
-}
-
-/** Table-cell display: overdue in red, today in amber, upcoming in gray. */
+/**
+ * Table-cell display with the deviation from schedule:
+ * overdue → red pill with days late, today → amber pill, upcoming → gray date.
+ */
 export function FollowUpCell({ value }: { value?: string | null }) {
-  const status = followUpStatus(value)
-  if (!status) return <span className="text-gray-300">—</span>
+  const daysLate = followUpDaysLate(value)
+  if (daysLate === null) return <span className="text-gray-300">—</span>
+  if (daysLate > 0)
+    return (
+      <span
+        className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-red-50 px-2 py-0.5 font-semibold text-red-600"
+        title={`Planned for ${fmtFollowUp(value)} — ${fmtDeviation(daysLate)}`}
+      >
+        ⚠ {fmtFollowUp(value)} · {daysLate}d late
+      </span>
+    )
+  if (daysLate === 0)
+    return (
+      <span
+        className="inline-flex items-center whitespace-nowrap rounded-full bg-amber-50 px-2 py-0.5 font-semibold text-amber-600"
+        title="Follow up today"
+      >
+        Today
+      </span>
+    )
   return (
-    <span className={STATUS_CLASSES[status]} title={STATUS_TITLES[status]}>
-      {status === 'overdue' && '⚠ '}
-      {status === 'today' ? 'Today' : fmtFollowUp(value)}
+    <span className="text-gray-600" title={`Next follow-up ${fmtDeviation(daysLate)}`}>
+      {fmtFollowUp(value)}
     </span>
   )
 }
@@ -80,6 +106,7 @@ export default function FollowUpField({
   /** Class for the date input (pass the form's shared input class). */
   className?: string
 }) {
+  const daysLate = followUpDaysLate(value)
   return (
     <div>
       <div className="flex items-center gap-1.5">
@@ -100,6 +127,17 @@ export default function FollowUpField({
           </button>
         )}
       </div>
+      {/* Deviation from schedule — shown while editing an overdue/due record */}
+      {daysLate !== null && daysLate > 0 && (
+        <p className="mt-1.5 flex items-center gap-1 rounded-lg bg-red-50 px-2 py-1 text-xs font-semibold text-red-600">
+          ⚠ {fmtDeviation(daysLate)} — reschedule below or clear once handled
+        </p>
+      )}
+      {daysLate === 0 && (
+        <p className="mt-1.5 flex items-center gap-1 rounded-lg bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-600">
+          Follow-up is due today
+        </p>
+      )}
       <div className="mt-1.5 flex flex-wrap gap-1">
         {QUICK_PICKS.map((q) => {
           const date = inDaysISO(q.days)

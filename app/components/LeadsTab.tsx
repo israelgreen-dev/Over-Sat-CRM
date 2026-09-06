@@ -4,7 +4,11 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { notifyEvent } from '@/lib/notify'
 import { SearchableSelect } from './OpportunitiesTable'
-import FollowUpField, { FollowUpCell, followUpSortValue } from './FollowUpField'
+import FollowUpField, {
+  FollowUpCell,
+  followUpSortValue,
+  followUpStatus,
+} from './FollowUpField'
 import {
   type Opportunity,
   COUNTRIES,
@@ -832,11 +836,16 @@ export default function LeadsTab({
             <tbody className="divide-y divide-gray-100 bg-white">
               {sorted.map((lead) => {
                 const converted = (lead.status ?? '') === 'Converted'
+                // Behind on follow-up schedule → tint the whole row.
+                const fuOverdue =
+                  !converted &&
+                  (lead.status ?? '') !== 'Dropped' &&
+                  followUpStatus(lead.follow_up_at) === 'overdue'
                 return (
                   <tr
                     key={lead.id}
                     onClick={() => !readOnly && !converted && openEdit(lead)}
-                    className={`transition-colors ${!readOnly && !converted ? 'cursor-pointer hover:bg-gray-50' : ''} ${converted ? 'opacity-60' : ''}`}
+                    className={`transition-colors ${!readOnly && !converted ? `cursor-pointer ${fuOverdue ? 'hover:bg-red-50' : 'hover:bg-gray-50'}` : ''} ${converted ? 'opacity-60' : ''} ${fuOverdue ? 'bg-red-50/40' : ''}`}
                   >
                     {/* Account (+ website) */}
                     <td className="whitespace-nowrap px-4 py-3">

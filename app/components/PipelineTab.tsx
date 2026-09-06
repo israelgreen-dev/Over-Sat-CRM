@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { Modal, AddOpportunityModal } from './OpportunitiesTable'
-import { FollowUpCell } from './FollowUpField'
+import { FollowUpCell, followUpStatus } from './FollowUpField'
 import {
   type Opportunity,
   effectiveProbability,
@@ -538,7 +538,13 @@ export default function PipelineTab({
                 <tr
                   key={opp.id}
                   onClick={() => setSelected(opp)}
-                  className="cursor-pointer transition-colors hover:bg-gray-50"
+                  className={`cursor-pointer transition-colors ${
+                    // Behind on follow-up schedule → tint the whole row.
+                    !['Win', 'Loss'].includes(opp.stage) &&
+                    followUpStatus(opp.follow_up_at) === 'overdue'
+                      ? 'bg-red-50/40 hover:bg-red-50'
+                      : 'hover:bg-gray-50'
+                  }`}
                 >
                   {/* Opportunity name */}
                   <td className="max-w-[200px] truncate px-4 py-3 font-medium text-gray-900">
