@@ -118,6 +118,38 @@ export default function Dashboard() {
   // True while the user arrived via a password-recovery link and must set a
   // new password before entering the app.
   const [passwordRecovery, setPasswordRecovery] = useState(false)
+  // Scanner-proof recovery/invite link (?token_hash=…&type=…): the token is
+  // redeemed only when the user submits the set-password form.
+  const [recoveryToken, setRecoveryToken] = useState<{
+    tokenHash: string
+    type: 'recovery' | 'invite'
+  } | null>(null)
+  // Auth-link error (e.g. expired reset link) surfaced on the login screen.
+  const [authNotice, setAuthNotice] = useState<string | null>(null)
+
+  useEffect(() => {
+    // Recovery links land on the app root carrying either a token_hash
+    // (custom email template) or an error (expired/used default link) in the
+    // query string or hash. Read both, then clean the URL.
+    const url = new URL(window.location.href)
+    const hashParams = new URLSearchParams(url.hash.replace(/^#/, ''))
+    const get = (k: string) => url.searchParams.get(k) ?? hashParams.get(k)
+    const tokenHash = get('token_hash')
+    const linkType = get('type')
+    const errCode = get('error_code')
+    const errDesc = get('error_description')
+    if (tokenHash && (linkType === 'recovery' || linkType === 'invite')) {
+      setRecoveryToken({ tokenHash, type: linkType })
+    } else if (errCode || errDesc) {
+      setAuthNotice(
+        errCode === 'otp_expired'
+          ? 'That password link has expired or was already used. Request a fresh one with "Forgot password?" below.'
+          : (errDesc ?? 'The sign-in link could not be processed.').replace(/\+/g, ' '),
+      )
+    }
+    if (tokenHash || errCode || errDesc)
+      window.history.replaceState(null, '', url.origin + url.pathname)
+  }, [])
   // Declared before the auth effect below, which sets it when a session loads.
   const [viewAs, setViewAs] = useState<string>(HEAD_OF_SALES)
 
@@ -702,8 +734,19 @@ export default function Dashboard() {
       </div>
     )
   }
+  if (recoveryToken)
+    return (
+      <ResetPasswordScreen
+        tokenHash={recoveryToken.tokenHash}
+        otpType={recoveryToken.type}
+        onDone={() => {
+          setRecoveryToken(null)
+          setPasswordRecovery(false)
+        }}
+      />
+    )
   if (passwordRecovery) return <ResetPasswordScreen onDone={() => setPasswordRecovery(false)} />
-  if (!profile) return <LoginScreen />
+  if (!profile) return <LoginScreen notice={authNotice} />
   if (!profile.role) return <SetupScreen email={profile.email} />
   if (oppsLoading) {
     return (

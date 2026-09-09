@@ -4,11 +4,14 @@ import Image from 'next/image'
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 
-export default function LoginScreen() {
+export default function LoginScreen({ notice }: { notice?: string | null }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // A notice from a failed auth link (e.g. expired reset link) — shown until
+  // the user starts a new action.
+  const [showNotice, setShowNotice] = useState(true)
   // 'login' | 'reset' (request form) | 'reset-sent' (confirmation)
   const [mode, setMode] = useState<'login' | 'reset' | 'reset-sent'>('login')
 
@@ -95,6 +98,11 @@ export default function LoginScreen() {
             onSubmit={mode === 'login' ? handleLogin : handleReset}
             className="rounded-2xl bg-white p-8 shadow-2xl space-y-5"
           >
+            {notice && showNotice && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                <p className="text-sm text-amber-700">{notice}</p>
+              </div>
+            )}
             <div>
               <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-gray-400">
                 Email
@@ -153,6 +161,7 @@ export default function LoginScreen() {
                   onClick={() => {
                     setMode('reset')
                     setError(null)
+                    setShowNotice(false)
                   }}
                   className="text-xs font-medium text-blue-600 hover:underline"
                 >

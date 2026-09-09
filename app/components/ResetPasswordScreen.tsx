@@ -1,19 +1,38 @@
 'use client'
 
 import Image from 'next/image'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 
 /**
- * Shown when the user arrives via a password-recovery link (Supabase fires
- * PASSWORD_RECOVERY and signs them into a temporary session). Sets the new
- * password and hands control back to the normal app flow.
+ * Set-a-new-password screen, reached two ways:
+ *
+ * 1. Legacy links: Supabase's default recovery link signs the user into a
+ *    temporary session on page load (PASSWORD_RECOVERY event) — no token here.
+ * 2. Scanner-proof links (`tokenHash` prop): the email links to the app with
+ *    ?token_hash=…&type=recovery, and the one-time token is only redeemed
+ *    (verifyOtp) when the user SUBMITS this form. Corporate email scanners
+ *    (e.g. Microsoft SafeLinks) prefetch every link in an email — with the
+ *    default flow that consumes the token before the user ever clicks, which
+ *    is the classic cause of "expired link" resets. A form submission is
+ *    something a scanner never does.
  */
-export default function ResetPasswordScreen({ onDone }: { onDone: () => void }) {
+export default function ResetPasswordScreen({
+  tokenHash,
+  otpType = 'recovery',
+  onDone,
+}: {
+  tokenHash?: string
+  otpType?: 'recovery' | 'invite'
+  onDone: () => void
+}) {
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // The token is one-shot: after a successful verifyOtp we hold a session, so
+  // a retry (e.g. network blip on updateUser) must not redeem it again.
+  const verifiedRef = useRef(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -27,6 +46,22 @@ export default function ResetPasswordScreen({ onDone }: { onDone: () => void }) 
     }
     setLoading(true)
     setError(null)
+    if (tokenHash && !verifiedRef.current) {
+      const { error: otpError } = await supabase.auth.verifyOtp({
+        type: otpType,
+        token_hash: tokenHash,
+      })
+      if (otpError) {
+        setLoading(false)
+        setError(
+          /expired|invalid|not found/i.test(otpError.message)
+            ? 'This link has expired or was already used. Go back to the sign-in screen and request a new one with "Forgot password?".'
+            : otpError.message,
+        )
+        return
+      }
+      verifiedRef.current = true
+    }
     const { error } = await supabase.auth.updateUser({ password })
     setLoading(false)
     if (error) {
@@ -53,8 +88,14 @@ export default function ResetPasswordScreen({ onDone }: { onDone: () => void }) 
               className="h-full w-full object-contain"
             />
           </div>
-          <h1 className="text-2xl font-bold text-white">Set a new password</h1>
-          <p className="mt-1 text-sm text-slate-400">Choose a new password for your account</p>
+          <h1 className="text-2xl font-bold text-white">
+            {otpType === 'invite' ? 'Welcome to Over-Sat CRM' : 'Set a new password'}
+          </h1>
+          <p className="mt-1 text-sm text-slate-400">
+            {otpType === 'invite'
+              ? 'Choose a password to activate your account'
+              : 'Choose a new password for your account'}
+          </p>
         </div>
 
         <form onSubmit={handleSubmit} className="rounded-2xl bg-white p-8 shadow-2xl space-y-5">

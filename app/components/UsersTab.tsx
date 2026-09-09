@@ -1074,24 +1074,16 @@ export default function UsersTab({
                       </div>
                     )}
                     {resetUserId === u.id && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500">
-                          Send reset email to <strong>{u.email}</strong>?
-                        </span>
-                        <button
-                          onClick={() => sendResetEmail(u.id, u.email)}
-                          disabled={busy}
-                          className="rounded-lg bg-slate-800 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50"
-                        >
-                          Send
-                        </button>
-                        <button
-                          onClick={() => setResetUserId(null)}
-                          className="text-xs text-gray-400 hover:text-gray-600"
-                        >
-                          ✕
-                        </button>
-                      </div>
+                      <ResetPanel
+                        email={u.email}
+                        busy={busy}
+                        onEmail={() => sendResetEmail(u.id, u.email)}
+                        onManual={async (pw) => {
+                          await updateUser(u.id, { password: pw })
+                          setResetUserId(null)
+                        }}
+                        onClose={() => setResetUserId(null)}
+                      />
                     )}
                   </td>
                 </tr>
@@ -1100,6 +1092,80 @@ export default function UsersTab({
           </table>
         )}
       </div>
+    </div>
+  )
+}
+
+// ── Reset-password panel ──────────────────────────────────────────────────────
+// Two ways to reset: email the user a reset link, or the admin sets a new
+// password right here (visible via Generate/Copy, recorded for the eye icon).
+function ResetPanel({
+  email,
+  busy,
+  onEmail,
+  onManual,
+  onClose,
+}: {
+  email: string
+  busy: boolean
+  onEmail: () => void
+  onManual: (password: string) => void
+  onClose: () => void
+}) {
+  const [mode, setMode] = useState<'choose' | 'manual'>('choose')
+  const [password, setPassword] = useState('')
+
+  if (mode === 'manual') {
+    return (
+      <div className="w-96 max-w-full space-y-1.5">
+        <p className="text-xs text-gray-500">
+          Set a new password for <strong>{email}</strong>:
+        </p>
+        <PasswordField
+          value={password}
+          onChange={setPassword}
+          placeholder="New password (min. 8 chars)"
+        />
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => onManual(password)}
+            disabled={busy || password.length < 8}
+            className="rounded-lg bg-slate-800 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50"
+          >
+            {busy ? 'Saving…' : 'Set Password'}
+          </button>
+          <button onClick={onClose} className="text-xs text-gray-400 hover:text-gray-600">
+            Cancel
+          </button>
+        </div>
+        <p className="text-[11px] text-gray-400">
+          Copy it before saving — you can view it again later via the eye icon.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs text-gray-500">
+        Reset password for <strong>{email}</strong>:
+      </span>
+      <button
+        onClick={onEmail}
+        disabled={busy}
+        className="rounded-lg bg-slate-800 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50"
+      >
+        ✉ Email reset link
+      </button>
+      <button
+        onClick={() => setMode('manual')}
+        className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+      >
+        Set manually…
+      </button>
+      <button onClick={onClose} className="text-xs text-gray-400 hover:text-gray-600">
+        ✕
+      </button>
     </div>
   )
 }

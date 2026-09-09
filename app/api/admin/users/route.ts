@@ -187,7 +187,11 @@ export async function PATCH(req: NextRequest) {
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     )
-    const { error } = await supabase.auth.resetPasswordForEmail(email)
+    // Without redirectTo the link falls back to the Supabase project's Site
+    // URL, which may not be the production app — send users back to where
+    // the request came from.
+    const origin = req.headers.get('origin') ?? 'https://over-sat-crm.com'
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: origin })
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
     return NextResponse.json({ success: true })
   }
