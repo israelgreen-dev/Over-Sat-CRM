@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { notifyEvent } from '@/lib/notify'
-import { SearchableSelect } from './OpportunitiesTable'
+import { SearchableSelect, formatTimestamp } from './OpportunitiesTable'
 import FollowUpField, {
   FollowUpCell,
   followUpSortValue,
@@ -35,6 +35,8 @@ export type Lead = {
   country: string | null
   owner: string | null
   status: string | null
+  /** Legacy free text — superseded by lead_notes (migration 018); kept as
+   *  display fallback for leads whose notes were never migrated. */
   description: string | null
   source: string | null
   opportunity_type: string | null
@@ -44,6 +46,14 @@ export type Lead = {
   converted_opportunity_id: string | null
   created_at: string
   updated_at: string
+}
+
+/** Timestamped note on a lead — same mechanism as opportunity notes. */
+export type LeadNote = {
+  id: string
+  lead_id: string
+  content: string
+  created_at: string
 }
 
 const STATUSES = ['New', 'Contacted', 'Qualified', 'Dropped'] as const
@@ -110,7 +120,7 @@ const LEAD_COLUMNS: { label: string; field: string }[] = [
   { label: 'Source', field: 'source' },
   { label: 'Priority', field: 'priority' },
   { label: 'Status', field: 'status' },
-  { label: 'Description', field: 'description' },
+  { label: 'Notes', field: 'description' },
   { label: 'Follow Up', field: 'follow_up_at' },
   { label: 'Updated', field: 'updated_at' },
   { label: 'Actions', field: '' },
@@ -200,6 +210,32 @@ export default function LeadsTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [addFormOpen])
 
+  // All lead notes, newest first, grouped by lead — powers the Notes column
+  // preview and search. Empty until migration 018 runs (description fallback).
+  const [notesByLead, setNotesByLead] = useState<Record<string, LeadNote[]>>({})
+  useEffect(() => {
+    let cancelled = false
+    supabase
+      .from('lead_notes')
+      .select('id, lead_id, content, created_at')
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        if (cancelled || !data) return
+        const map: Record<string, LeadNote[]> = {}
+        for (const n of data as LeadNote[]) (map[n.lead_id] ??= []).push(n)
+        setNotesByLead(map)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [leads])
+
+  // Latest note (or the legacy description) — shown in the Notes column.
+  const notePreview = useCallback(
+    (l: Lead) => notesByLead[l.id]?.[0]?.content ?? l.description ?? '',
+    [notesByLead],
+  )
+
   const visible = useMemo(
     () =>
       leads.filter((l) => {
@@ -217,26 +253,38 @@ export default function LeadsTab({
             (l.contact_email ?? '').toLowerCase().includes(q) ||
             (l.country ?? '').toLowerCase().includes(q) ||
             (l.owner ?? '').toLowerCase().includes(q) ||
-            (l.description ?? '').toLowerCase().includes(q)
+            notePreview(l).toLowerCase().includes(q)
           if (!hit) return false
         }
         return true
       }),
-    [leads, statusFilter, filterManager, filterCountry, filterSource, filterPriority, search],
+    [
+      leads,
+      statusFilter,
+      filterManager,
+      filterCountry,
+      filterSource,
+      filterPriority,
+      search,
+      notePreview,
+    ],
   )
 
   // Sorted view — same click-to-sort mechanism as the Opportunities table.
   const sorted = useMemo(() => {
     if (!sortKey) return visible
     return [...visible].sort((a, b) => {
-      const av = leadSortValue(a, sortKey)
-      const bv = leadSortValue(b, sortKey)
+      // 'description' now sorts by the latest note text.
+      const av =
+        sortKey === 'description' ? notePreview(a).toLowerCase() : leadSortValue(a, sortKey)
+      const bv =
+        sortKey === 'description' ? notePreview(b).toLowerCase() : leadSortValue(b, sortKey)
       let cmp: number
       if (typeof av === 'number' && typeof bv === 'number') cmp = av - bv
       else cmp = String(av).localeCompare(String(bv))
       return sortDir === 'asc' ? cmp : -cmp
     })
-  }, [visible, sortKey, sortDir])
+  }, [visible, sortKey, sortDir, notePreview])
 
   const countryOptions = useMemo(
     () => Array.from(new Set(leads.map((l) => l.country ?? '').filter(Boolean))).sort(),
@@ -312,20 +360,24 @@ export default function LeadsTab({
       source: form.source,
       opportunity_type: form.opportunity_type,
       priority: form.priority,
-      description: form.description.trim(),
       follow_up_at: form.follow_up_at || null,
     }
     // Progressive fallback: strip columns that predate migration 011.
     let sbError: { message: string } | null = null
+    let createdId: string | null = null
     for (let attempt = 0; attempt < 5; attempt++) {
-      const { error } =
-        editing === 'new'
-          ? await supabase.from('leads').insert([payload])
-          : await supabase
-              .from('leads')
-              .update(payload)
-              .eq('id', (editing as Lead).id)
-      sbError = error
+      if (editing === 'new') {
+        const res = await supabase.from('leads').insert([payload]).select('id')
+        sbError = res.error
+        createdId = res.data?.[0]?.id ?? null
+      } else {
+        const res = await supabase
+          .from('leads')
+          .update(payload)
+          .eq('id', (editing as Lead).id)
+        sbError = res.error
+      }
+      const error = sbError
       if (!error) break
       if (error.message?.includes('contact_title')) {
         delete payload.contact_title
@@ -357,11 +409,23 @@ export default function LeadsTab({
       }
       break
     }
-    setBusy(false)
     if (sbError) {
+      setBusy(false)
       setFormError(sbError.message)
       return
     }
+    // New lead: the Notes text becomes its first timestamped note. If
+    // migration 018 hasn't run yet, fall back to the legacy description.
+    const firstNote = form.description.trim()
+    if (editing === 'new' && firstNote && createdId) {
+      const { error: noteErr } = await supabase
+        .from('lead_notes')
+        .insert([{ lead_id: createdId, content: firstNote }])
+      if (noteErr) {
+        await supabase.from('leads').update({ description: firstNote }).eq('id', createdId)
+      }
+    }
+    setBusy(false)
     notifyEvent(editing === 'new' ? 'lead_created' : 'lead_updated', String(payload.account), {
       Account: String(payload.account ?? ''),
       Website: String(payload.website ?? ''),
@@ -375,7 +439,9 @@ export default function LeadsTab({
       Source: String(payload.source ?? ''),
       'Opportunity Type': String(payload.opportunity_type ?? ''),
       Priority: String(payload.priority ?? ''),
-      Description: String(payload.description ?? ''),
+      ...(editing === 'new' && form.description.trim()
+        ? { Notes: form.description.trim() }
+        : {}),
       'Follow Up': String(payload.follow_up_at ?? ''),
     })
     setEditing(null)
@@ -511,8 +577,18 @@ export default function LeadsTab({
       ])
     }
 
-    // 3. Carry the lead's description over as the deal's first note
-    if (converting.description?.trim()) {
+    // 3. Carry the lead's notes over to the deal (oldest first, so the
+    //    opportunity's note order mirrors the lead's history). Falls back to
+    //    the legacy description for leads that predate lead_notes.
+    const leadNotes = [...(notesByLead[converting.id] ?? [])].reverse()
+    if (leadNotes.length > 0) {
+      await supabase.from('notes').insert(
+        leadNotes.map((n) => ({
+          opportunity_id: String(newOpp.id),
+          content: `From lead (${formatTimestamp(n.created_at)}): ${n.content}`,
+        })),
+      )
+    } else if (converting.description?.trim()) {
       await supabase.from('notes').insert([
         {
           opportunity_id: String(newOpp.id),
@@ -921,12 +997,17 @@ export default function LeadsTab({
                         {lead.status ?? 'New'}
                       </span>
                     </td>
-                    {/* Description */}
+                    {/* Notes — latest note (legacy description as fallback) */}
                     <td
                       className="max-w-[200px] truncate px-4 py-3 text-xs text-gray-500"
-                      title={lead.description ?? ''}
+                      title={notePreview(lead)}
                     >
-                      {lead.description || '—'}
+                      {notePreview(lead) || '—'}
+                      {(notesByLead[lead.id]?.length ?? 0) > 1 && (
+                        <span className="ml-1 rounded-full bg-gray-100 px-1.5 text-[10px] font-semibold text-gray-400">
+                          {notesByLead[lead.id].length}
+                        </span>
+                      )}
                     </td>
                     {/* Follow Up */}
                     <td className="whitespace-nowrap px-4 py-3 text-xs">
@@ -1248,18 +1329,34 @@ export default function LeadsTab({
                     className={inputCls}
                   />
                 </div>
-                <div className="col-span-2">
-                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">
-                    Description
-                  </label>
-                  <textarea
-                    rows={3}
-                    className={`${inputCls} resize-none`}
-                    placeholder="What is this lead about? Needs, source, next step…"
-                    value={form.description}
-                    onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                  />
-                </div>
+                {editing === 'new' ? (
+                  <div className="col-span-2">
+                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">
+                      Notes
+                    </label>
+                    <textarea
+                      rows={3}
+                      className={`${inputCls} resize-none`}
+                      placeholder="What is this lead about? Needs, source, next step… (saved as the first note)"
+                      value={form.description}
+                      onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                    />
+                  </div>
+                ) : (
+                  <div className="col-span-2">
+                    <LeadNotesPanel
+                      leadId={(editing as Lead).id}
+                      notes={notesByLead[(editing as Lead).id] ?? []}
+                      legacyDescription={(editing as Lead).description}
+                      onAdded={(note) =>
+                        setNotesByLead((prev) => ({
+                          ...prev,
+                          [note.lead_id]: [note, ...(prev[note.lead_id] ?? [])],
+                        }))
+                      }
+                    />
+                  </div>
+                )}
               </div>
 
               {formError && <p className="mt-3 text-xs text-red-500">{formError}</p>}
@@ -1342,6 +1439,114 @@ export default function LeadsTab({
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Lead notes panel ──────────────────────────────────────────────────────────
+// Timestamped notes on a lead — the same mechanism as opportunity notes.
+// The parent owns the notes list (it also feeds the table's Notes column),
+// so this panel only renders and reports additions.
+function LeadNotesPanel({
+  leadId,
+  notes,
+  legacyDescription,
+  onAdded,
+}: {
+  leadId: string
+  notes: LeadNote[]
+  /** Pre-migration free text, shown read-only when no notes exist yet. */
+  legacyDescription?: string | null
+  onAdded: (note: LeadNote) => void
+}) {
+  const [noteText, setNoteText] = useState('')
+  const [adding, setAdding] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function addNote() {
+    if (!noteText.trim()) return
+    setAdding(true)
+    setError(null)
+    const { data, error: err } = await supabase
+      .from('lead_notes')
+      .insert([{ lead_id: leadId, content: noteText.trim() }])
+      .select()
+    setAdding(false)
+    if (err) {
+      setError(
+        err.message.includes('lead_notes')
+          ? 'Notes need database migration 018 — ask your admin to run it.'
+          : err.message,
+      )
+      return
+    }
+    const saved: LeadNote = data?.[0] ?? {
+      id: crypto.randomUUID(),
+      lead_id: leadId,
+      content: noteText.trim(),
+      created_at: new Date().toISOString(),
+    }
+    onAdded(saved)
+    setNoteText('')
+  }
+
+  return (
+    <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-4">
+      <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-400">Notes</p>
+      <div className="flex gap-2">
+        <textarea
+          rows={2}
+          className="flex-1 resize-none rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 transition-colors focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400/20"
+          placeholder="Add a note…"
+          value={noteText}
+          onChange={(e) => setNoteText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) addNote()
+          }}
+        />
+        <button
+          type="button"
+          onClick={addNote}
+          disabled={adding || !noteText.trim()}
+          className="self-end rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {adding ? '…' : 'Add'}
+        </button>
+      </div>
+      {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
+      <div className="mt-4 space-y-2">
+        {notes.length === 0 && !legacyDescription?.trim() ? (
+          <div className="rounded-lg border-2 border-dashed border-zinc-200 py-8 text-center">
+            <p className="text-xs text-zinc-400">No notes yet.</p>
+          </div>
+        ) : (
+          <>
+            {notes.map((note) => (
+              <div
+                key={note.id}
+                className="rounded-lg border border-zinc-100 bg-white px-3 py-2.5 shadow-sm"
+              >
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-900">
+                  {note.content}
+                </p>
+                <span className="mt-1.5 block tabular-nums text-[11px] text-zinc-400">
+                  {formatTimestamp(note.created_at)}
+                </span>
+              </div>
+            ))}
+            {notes.length === 0 && legacyDescription?.trim() && (
+              <div className="rounded-lg border border-zinc-100 bg-white px-3 py-2.5 shadow-sm">
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-900">
+                  {legacyDescription}
+                </p>
+                <span className="mt-1.5 block text-[11px] text-zinc-400">
+                  Original description
+                </span>
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   )
 }

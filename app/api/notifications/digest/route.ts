@@ -22,6 +22,7 @@ import {
   EVENT_LABELS,
   NOTIFY_ROLES,
   normalizeNotificationConfig,
+  type FollowUpSettings,
   type NotificationEvent,
   type NotificationSettings,
   type NotifyRole,
@@ -170,12 +171,15 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // ── Follow-up reminders — one email per record owner ─────────────────────
-  // Every daily run: each Sales Manager (any user owning records) gets a list
-  // of THEIR leads/opportunities whose follow-up date is today or has passed.
-  // Independent of the Admin/HoS digest config above. Repeats daily until the
-  // follow-up is done, moved, or cleared — that persistence is the point.
-  results.follow_up_reminders = await sendFollowUpReminders(sb, now)
+  // ── Follow-up reminders (configured in Settings → Follow-up Reminders) ───
+  // Owners get their own due list; Admin / Head of Sales can additionally
+  // receive a team-wide summary. Window and overdue behavior come from the
+  // stored followUps settings.
+  const fu = config.followUps
+  results.follow_up_reminders =
+    fu.owners || fu.admin || fu.head_of_sales
+      ? await sendFollowUpReminders(sb, now, fu)
+      : 'disabled'
 
   return NextResponse.json({ results })
 }
@@ -186,20 +190,29 @@ const esc = (s: unknown) =>
 async function sendFollowUpReminders(
   sb: ReturnType<typeof serviceClient>,
   now: Date,
+  fu: FollowUpSettings,
 ): Promise<Record<string, string> | string> {
   const todayISO = now.toISOString().slice(0, 10)
-  const [dueLeads, dueOpps] = await Promise.all([
-    sb
-      .from('leads')
-      .select('account, owner, follow_up_at, status')
-      .lte('follow_up_at', todayISO)
-      .limit(500),
-    sb
-      .from('opportunities')
-      .select('name, customer_name, owner, follow_up_at, stage')
-      .lte('follow_up_at', todayISO)
-      .limit(500),
-  ])
+  // Reminder window: up to remindDaysBefore ahead; overdue items are included
+  // only while overdueDaily is on (off = stop reminding once the date passed).
+  const maxDate = new Date(now)
+  maxDate.setUTCDate(maxDate.getUTCDate() + Math.max(0, fu.remindDaysBefore || 0))
+  const maxISO = maxDate.toISOString().slice(0, 10)
+  let leadsQuery = sb
+    .from('leads')
+    .select('account, owner, follow_up_at, status')
+    .lte('follow_up_at', maxISO)
+    .limit(500)
+  let oppsQuery = sb
+    .from('opportunities')
+    .select('name, customer_name, owner, follow_up_at, stage')
+    .lte('follow_up_at', maxISO)
+    .limit(500)
+  if (!fu.overdueDaily) {
+    leadsQuery = leadsQuery.gte('follow_up_at', todayISO)
+    oppsQuery = oppsQuery.gte('follow_up_at', todayISO)
+  }
+  const [dueLeads, dueOpps] = await Promise.all([leadsQuery, oppsQuery])
   // Migration 017 not applied yet → the column doesn't exist; stay dormant.
   if (dueLeads.error || dueOpps.error)
     return (dueLeads.error ?? dueOpps.error)!.message
@@ -236,44 +249,88 @@ async function sendFollowUpReminders(
     if (name && u.email) emailByName.set(name, u.email)
   }
 
-  const outcome: Record<string, string> = {}
-  for (const [owner, items] of byOwner) {
-    const email = emailByName.get(owner)
-    if (!email) {
-      outcome[owner] = 'no-account-email'
-      continue
-    }
-    items.sort((a, b) => a.date.localeCompare(b.date))
-    const overdueCount = items.filter((i) => i.date < todayISO).length
-    const rows = items
+  // "3 days overdue" / "due today" / "due in 2 days" with matching color.
+  function whenLabel(date: string): string {
+    const days = Math.round(
+      (new Date(todayISO).getTime() - new Date(date).getTime()) / 86_400_000,
+    )
+    if (days > 0)
+      return `<span style="color:#dc2626;font-weight:bold">${days} day${days !== 1 ? 's' : ''} overdue</span>`
+    if (days === 0) return `<span style="color:#d97706;font-weight:bold">due today</span>`
+    return `<span style="color:#6b7280">due in ${-days} day${days !== -1 ? 's' : ''}</span>`
+  }
+  const itemRows = (items: { kind: string; name: string; date: string }[]) =>
+    items
       .slice(0, 30)
-      .map((i) => {
-        const days = Math.round(
-          (new Date(todayISO).getTime() - new Date(i.date).getTime()) / 86_400_000,
+      .map((i) => `<li><strong>${esc(i.kind)}</strong> — ${esc(i.name)} · ${whenLabel(i.date)}</li>`)
+      .join('') + (items.length > 30 ? '<li>…and more</li>' : '')
+
+  const outcome: Record<string, string> = {}
+
+  // Personal reminder to each record owner.
+  if (fu.owners) {
+    for (const [owner, items] of byOwner) {
+      const email = emailByName.get(owner)
+      if (!email) {
+        outcome[owner] = 'no-account-email'
+        continue
+      }
+      items.sort((a, b) => a.date.localeCompare(b.date))
+      const overdueCount = items.filter((i) => i.date < todayISO).length
+      const body = emailShell(
+        `You have ${items.length} follow-up${items.length !== 1 ? 's' : ''} due`,
+        `<p style="margin:0 0 8px">Hi ${esc(owner)}, these need your attention:</p>
+         <ul style="margin:0;padding-left:18px">${itemRows(items)}</ul>
+         <p style="margin-top:12px"><a href="https://over-sat-crm.com" style="color:#f97316">Open the CRM →</a></p>
+         <p style="margin-top:8px;color:#9ca3af;font-size:12px">Reminder settings are managed in Settings → Email Notifications.</p>`,
+      )
+      try {
+        const sent = await sendMail(
+          [email],
+          `[Over-Sat CRM] ${items.length} follow-up${items.length !== 1 ? 's' : ''} due${overdueCount > 0 ? ` (${overdueCount} overdue)` : ''}`,
+          body,
         )
-        const when =
-          days > 0
-            ? `<span style="color:#dc2626;font-weight:bold">${days} day${days !== 1 ? 's' : ''} overdue</span>`
-            : `<span style="color:#d97706;font-weight:bold">due today</span>`
-        return `<li><strong>${esc(i.kind)}</strong> — ${esc(i.name)} · ${when}</li>`
+        outcome[owner] = sent ? `sent:${items.length}` : 'send-skipped'
+      } catch (e) {
+        outcome[owner] = e instanceof Error ? e.message : 'send-failed'
+      }
+    }
+  }
+
+  // Team-wide summary for Admin / Head of Sales, when enabled per role.
+  const teamRoles = (['admin', 'head_of_sales'] as const).filter((r) => fu[r])
+  if (teamRoles.length > 0) {
+    const byRole = await resolveRecipientsByRole(sb)
+    const owners = [...byOwner.keys()].sort()
+    const total = [...byOwner.values()].reduce((s, v) => s + v.length, 0)
+    const sections = owners
+      .map((owner) => {
+        const items = [...byOwner.get(owner)!].sort((a, b) => a.date.localeCompare(b.date))
+        return `<h3 style="margin:12px 0 4px;font-size:14px">${esc(owner)} (${items.length})</h3>
+                <ul style="margin:0;padding-left:18px">${itemRows(items)}</ul>`
       })
       .join('')
     const body = emailShell(
-      `You have ${items.length} follow-up${items.length !== 1 ? 's' : ''} due`,
-      `<p style="margin:0 0 8px">Hi ${esc(owner)}, these need your attention:</p>
-       <ul style="margin:0;padding-left:18px">${rows}${items.length > 30 ? '<li>…and more</li>' : ''}</ul>
-       <p style="margin-top:12px"><a href="https://over-sat-crm.com" style="color:#f97316">Open the CRM →</a></p>
-       <p style="margin-top:8px;color:#9ca3af;font-size:12px">This reminder repeats daily until the follow-up date is updated or cleared.</p>`,
+      `Team follow-ups due · ${total}`,
+      sections +
+        `<p style="margin-top:12px"><a href="https://over-sat-crm.com" style="color:#f97316">Open the CRM →</a></p>`,
     )
-    try {
-      const sent = await sendMail(
-        [email],
-        `[Over-Sat CRM] ${items.length} follow-up${items.length !== 1 ? 's' : ''} due${overdueCount > 0 ? ` (${overdueCount} overdue)` : ''}`,
-        body,
-      )
-      outcome[owner] = sent ? `sent:${items.length}` : 'send-skipped'
-    } catch (e) {
-      outcome[owner] = e instanceof Error ? e.message : 'send-failed'
+    for (const role of teamRoles) {
+      const recipients = byRole[role]
+      if (recipients.length === 0) {
+        outcome[`team:${role}`] = 'no-recipients'
+        continue
+      }
+      try {
+        const sent = await sendMail(
+          recipients,
+          `[Over-Sat CRM] Team follow-ups due — ${total}`,
+          body,
+        )
+        outcome[`team:${role}`] = sent ? `sent:${total}` : 'send-skipped'
+      } catch (e) {
+        outcome[`team:${role}`] = e instanceof Error ? e.message : 'send-failed'
+      }
     }
   }
   return outcome

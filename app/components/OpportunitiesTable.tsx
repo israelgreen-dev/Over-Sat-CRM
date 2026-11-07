@@ -2734,7 +2734,7 @@ function StageBadge({ stage }: { stage: string }) {
   )
 }
 
-function formatTimestamp(ts: string) {
+export function formatTimestamp(ts: string) {
   const d = new Date(ts)
   return (
     d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) +

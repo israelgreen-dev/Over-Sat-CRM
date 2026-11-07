@@ -12,6 +12,7 @@ import {
   type NotificationMode,
   type NotifyRole,
   type NotificationEvent,
+  type FollowUpSettings,
 } from '@/lib/notification-types'
 
 const PROBABILITY_STAGES = ['Discovery', 'Proposal', 'Negotiation', 'Win', 'Loss']
@@ -146,6 +147,14 @@ export default function SettingsTab({
             />
           ))}
         </div>
+
+        {/* Follow-up reminders — who is emailed about due follow-ups, and when */}
+        <FollowUpReminderPanel
+          settings={notificationSettings.followUps}
+          onChange={(followUps) =>
+            onNotificationSettingsChange?.({ ...notificationSettings, followUps })
+          }
+        />
       </div>
 
       {/* ── Products ───────────────────────────────────────────────────────── */}
@@ -641,6 +650,100 @@ function ListEditor({
         >
           + Add
         </button>
+      </div>
+    </div>
+  )
+}
+
+// Follow-up reminder configuration — who is emailed about due follow-ups,
+// how far ahead reminders start, and whether overdue items repeat daily.
+function FollowUpReminderPanel({
+  settings,
+  onChange,
+}: {
+  settings: FollowUpSettings
+  onChange: (v: FollowUpSettings) => void
+}) {
+  const Toggle = ({
+    checked,
+    onToggle,
+    label,
+    hint,
+  }: {
+    checked: boolean
+    onToggle: () => void
+    label: string
+    hint: string
+  }) => (
+    <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-gray-100 bg-white px-3 py-2.5">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={onToggle}
+        className="mt-0.5 h-4 w-4 rounded border-gray-300 text-rose-500 focus:ring-rose-400"
+      />
+      <span>
+        <span className="block text-xs font-semibold text-gray-700">{label}</span>
+        <span className="block text-[11px] text-gray-400">{hint}</span>
+      </span>
+    </label>
+  )
+
+  return (
+    <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50/50 p-4">
+      <div className="mb-1 flex items-center gap-2">
+        <span className="h-2 w-2 rounded-full bg-amber-500" />
+        <h4 className="text-sm font-bold text-gray-900">Follow-up Reminders</h4>
+      </div>
+      <p className="mb-3 text-xs text-gray-400">
+        Daily emails about leads and opportunities whose follow-up date is due. Sent each
+        morning (06:00 UTC); recipients derive from user accounts.
+      </p>
+
+      <div className="grid grid-cols-1 gap-2 lg:grid-cols-3">
+        <Toggle
+          checked={settings.owners}
+          onToggle={() => onChange({ ...settings, owners: !settings.owners })}
+          label="Record owners"
+          hint="Each Sales Manager gets their own due follow-ups"
+        />
+        <Toggle
+          checked={settings.admin}
+          onToggle={() => onChange({ ...settings, admin: !settings.admin })}
+          label="Admin — team summary"
+          hint="All due follow-ups across the team, grouped by owner"
+        />
+        <Toggle
+          checked={settings.head_of_sales}
+          onToggle={() => onChange({ ...settings, head_of_sales: !settings.head_of_sales })}
+          label="Head of Sales — team summary"
+          hint="All due follow-ups across the team, grouped by owner"
+        />
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2">
+        <label className="flex items-center gap-2 text-xs font-semibold text-gray-700">
+          Start reminding
+          <select
+            className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs font-medium text-gray-900 focus:border-blue-400 focus:outline-none"
+            value={settings.remindDaysBefore}
+            onChange={(e) => onChange({ ...settings, remindDaysBefore: Number(e.target.value) })}
+          >
+            <option value={0}>On the due date</option>
+            <option value={1}>1 day before</option>
+            <option value={3}>3 days before</option>
+            <option value={7}>1 week before</option>
+          </select>
+        </label>
+        <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-gray-700">
+          <input
+            type="checkbox"
+            checked={settings.overdueDaily}
+            onChange={() => onChange({ ...settings, overdueDaily: !settings.overdueDaily })}
+            className="h-4 w-4 rounded border-gray-300 text-rose-500 focus:ring-rose-400"
+          />
+          Keep reminding daily while overdue
+        </label>
       </div>
     </div>
   )
