@@ -921,10 +921,24 @@ export default function UsersTab({
                         <input
                           type="text"
                           placeholder="Territory…"
+                          list="territory-options"
+                          title="Managers sharing the same territory form a team: they see each other's leads and opportunities read-only. Pick an existing territory from the suggestions to avoid typos splitting a team."
                           value={managerTerritories[u.name] ?? ''}
                           onChange={(e) => onManagerTerritoryChange?.(u.name, e.target.value)}
                           className="w-36 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-700 placeholder-gray-400 focus:border-blue-400 focus:bg-white focus:outline-none transition-colors"
                         />
+                        {/* Shared suggestion list — one instance per render is fine */}
+                        <datalist id="territory-options">
+                          {Array.from(
+                            new Set(
+                              Object.values(managerTerritories)
+                                .map((t) => t.trim())
+                                .filter(Boolean),
+                            ),
+                          ).map((t) => (
+                            <option key={t} value={t} />
+                          ))}
+                        </datalist>
                       </div>
                     ) : (
                       <span className="text-xs text-gray-300">—</span>

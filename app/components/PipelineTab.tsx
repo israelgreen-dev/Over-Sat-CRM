@@ -138,6 +138,8 @@ export default function PipelineTab({
   onOppUpdated,
   onOppAdded,
   onOppDeleted,
+  teamNames = [],
+  teamOpps = [],
 }: {
   opportunities: Opportunity[]
   addFormOpen?: boolean
@@ -151,8 +153,16 @@ export default function PipelineTab({
   onOppUpdated?: (updated: Opportunity) => void
   onOppAdded?: (newOpp: Opportunity) => void
   onOppDeleted?: (id: string | number) => void
+  /** Territory teammates (same Territory in Users) — enables the Team view. */
+  teamNames?: string[]
+  /** Teammates' opportunities, shown read-only when Team view is on. */
+  teamOpps?: Opportunity[]
 }) {
   const [selected, setSelected] = useState<Opportunity | null>(null)
+  // Team view: also show teammates' records (read-only).
+  const [teamView, setTeamView] = useState(false)
+  const teamIds = new Set(teamOpps.map((o) => String(o.id)))
+  const isTeamOpp = (o: Opportunity) => teamIds.has(String(o.id))
   const [filterText, setFilterText] = useState<string>('')
   const [filterManager, setFilterManager] = useState<string>('')
   const [filterProduct, setFilterProduct] = useState<string>('')
@@ -204,7 +214,9 @@ export default function PipelineTab({
   }
 
   // ── Build the displayed row list ──────────────────────────────────────────
-  let displayedRows = opportunities.filter((r) => {
+  const sourceRows =
+    teamView && teamOpps.length > 0 ? [...opportunities, ...teamOpps] : opportunities
+  let displayedRows = sourceRows.filter((r) => {
     if (filterText) {
       const q = filterText.trim().toLowerCase()
       const hit =
@@ -413,6 +425,29 @@ export default function PipelineTab({
 
       {/* ── Dropdown filters ─────────────────────────────────────────────── */}
       <div className="mb-4 flex flex-wrap items-center gap-6">
+        {/* Team view — managers sharing this user's Territory (read-only) */}
+        {teamNames.length > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+              Show
+            </span>
+            <div className="flex overflow-hidden rounded-xl border border-gray-200 bg-gray-50 text-sm font-medium">
+              <button
+                onClick={() => setTeamView(false)}
+                className={`px-3 py-1.5 transition-colors ${!teamView ? 'bg-slate-800 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+              >
+                My records
+              </button>
+              <button
+                onClick={() => setTeamView(true)}
+                title={`Read-only view of your territory teammates: ${teamNames.join(', ')}`}
+                className={`px-3 py-1.5 transition-colors ${teamView ? 'bg-slate-800 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+              >
+                👁 Team
+              </button>
+            </div>
+          </div>
+        )}
         {managers && managers.length > 0 && (
           <FilterSelect
             label="Sales Manager"
@@ -557,6 +592,14 @@ export default function PipelineTab({
                   {/* Sales Manager */}
                   <td className="whitespace-nowrap px-4 py-3 text-gray-600">
                     {(opp.owner as string) ?? '—'}
+                    {isTeamOpp(opp) && (
+                      <span
+                        className="ml-1.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700"
+                        title="Teammate's record — view only"
+                      >
+                        👁
+                      </span>
+                    )}
                   </td>
                   {/* Product */}
                   <td className="whitespace-nowrap px-4 py-3 text-gray-600">
@@ -632,9 +675,10 @@ export default function PipelineTab({
                   >
                     {fmtUpdated(opp.updated_at ?? opp.created_at)}
                   </td>
-                  {/* Actions — delete */}
+                  {/* Actions — delete (never on a teammate's record) */}
                   {canDelete && (
                     <td className="whitespace-nowrap px-4 py-3 text-right">
+                      {!isTeamOpp(opp) && (
                       <button
                         onClick={(e) => handleRowDelete(e, opp)}
                         disabled={deletingId === opp.id}
@@ -674,6 +718,7 @@ export default function PipelineTab({
                           </svg>
                         )}
                       </button>
+                      )}
                     </td>
                   )}
                 </tr>
@@ -689,10 +734,11 @@ export default function PipelineTab({
           onClose={() => setSelected(null)}
           onSaved={handleSaved}
           onDeleted={() => handleDeleted(selected.id)}
-          canDelete={canDelete}
+          canDelete={canDelete && !isTeamOpp(selected)}
           products={products}
           managers={managers}
           probabilityDefaults={probabilityDefaults}
+          readOnly={isTeamOpp(selected)}
         />
       )}
 

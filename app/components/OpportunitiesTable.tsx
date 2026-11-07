@@ -283,6 +283,7 @@ export function Modal({
   products: productsProp,
   managers: managersProp,
   probabilityDefaults = DEFAULT_PROBABILITY,
+  readOnly = false,
 }: {
   opportunity: Opportunity
   onClose: () => void
@@ -292,6 +293,8 @@ export function Modal({
   products?: string[]
   managers?: string[]
   probabilityDefaults?: Record<string, number>
+  /** Team view: a colleague's record — everything visible, nothing editable. */
+  readOnly?: boolean
 }) {
   const [modalTab, setModalTab] = useState<
     'details' | 'notes' | 'documents' | 'contacts' | 'history'
@@ -518,12 +521,21 @@ export function Modal({
           {/* Title input */}
           <div className="min-w-0 flex-1">
             <input
-              className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-lg font-bold text-zinc-900 focus:border-blue-400 focus:bg-white focus:outline-none"
+              className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-lg font-bold text-zinc-900 focus:border-blue-400 focus:bg-white focus:outline-none disabled:opacity-80"
               value={draft.name}
+              disabled={readOnly}
               onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
               placeholder="Opportunity name…"
             />
             <div className="mt-1.5 flex items-center gap-2">
+              {readOnly && (
+                <span
+                  className="rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700"
+                  title="Team view — this record belongs to a colleague"
+                >
+                  👁 View only — owned by {draft.owner || 'another manager'}
+                </span>
+              )}
               <StageBadge stage={draft.stage} />
               {draft.status && <StatusBadge status={draft.status} />}
               {opportunity.created_at && (
@@ -541,7 +553,7 @@ export function Modal({
 
           {/* Buttons */}
           <div className="flex shrink-0 items-center gap-2">
-            {canDelete && (
+            {canDelete && !readOnly && (
               <button
                 onClick={handleDelete}
                 disabled={deleting || saving}
@@ -563,13 +575,15 @@ export function Modal({
                 </svg>
               </button>
             )}
-            <button
-              onClick={saveAndClose}
-              disabled={saving || !canSave}
-              className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {saving ? 'Saving…' : 'Save & Close'}
-            </button>
+            {!readOnly && (
+              <button
+                onClick={saveAndClose}
+                disabled={saving || !canSave}
+                className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {saving ? 'Saving…' : 'Save & Close'}
+              </button>
+            )}
             <button
               onClick={guardedClose}
               aria-label="Close"
@@ -602,6 +616,7 @@ export function Modal({
             <button
               key={s}
               type="button"
+              disabled={readOnly}
               onClick={() =>
                 setDraft((d) => ({
                   ...d,
@@ -637,6 +652,9 @@ export function Modal({
 
       {/* ── Scrollable body ────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
+        {/* display:contents keeps the layout; disabled cascades to every
+            input, select, textarea and button inside (team view). */}
+        <fieldset disabled={readOnly} className="contents">
         {modalTab === 'details' && (
           <>
             <div className="grid grid-cols-2 gap-4">
@@ -1000,6 +1018,7 @@ export function Modal({
         {modalTab === 'documents' && <DocumentsPanel opportunityId={String(opportunity.id)} />}
         {modalTab === 'contacts' && <ContactsPanel opportunityId={String(opportunity.id)} />}
         {modalTab === 'history' && <HistoryPanel opportunityId={String(opportunity.id)} />}
+        </fieldset>
       </div>
     </ResizableDialog>
   )

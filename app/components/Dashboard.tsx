@@ -686,6 +686,57 @@ export default function Dashboard() {
     [visibleLeads, selectedYear],
   )
 
+  // ── Territory team (read-only visibility between same-territory managers) ──
+  // A manager's "team" = other manager-acting users whose Territory (Users
+  // tab) matches theirs, case-insensitively. Admin/HoS personas see all data
+  // anyway, so this applies to the manager role only.
+  const teamNames = useMemo(() => {
+    if (profile?.role !== 'manager') return []
+    const territory = (managerTerritories[profile.name] ?? '').trim().toLowerCase()
+    if (!territory) return []
+    return managers.filter(
+      (m) =>
+        m !== profile.name &&
+        (managerTerritories[m] ?? '').trim().toLowerCase() === territory,
+    )
+  }, [profile, managers, managerTerritories])
+
+  const teamLeads = useMemo(
+    () =>
+      teamNames.length === 0
+        ? []
+        : leads.filter((l) =>
+            teamNames.some((n) => n.toLowerCase() === (l.owner ?? '').toLowerCase()),
+          ),
+    [teamNames, leads],
+  )
+
+  const teamOpps = useMemo(
+    () =>
+      teamNames.length === 0
+        ? []
+        : yearFilteredOpps.filter((o) =>
+            teamNames.some((n) => n.toLowerCase() === ((o.owner as string) ?? '').toLowerCase()),
+          ),
+    [teamNames, yearFilteredOpps],
+  )
+
+  // Every account in the CRM (any owner) — powers the duplicate warning on
+  // lead creation, independent of what the current persona can see.
+  const existingAccounts = useMemo(
+    () => [
+      ...leads
+        .filter((l) => (l.status ?? 'New') !== 'Dropped')
+        .map((l) => ({ account: l.account, owner: l.owner ?? '', kind: 'lead' })),
+      ...liveOpps.map((o) => ({
+        account: (o.customer_name as string) ?? '',
+        owner: (o.owner as string) ?? '',
+        kind: 'opportunity',
+      })),
+    ],
+    [leads, liveOpps],
+  )
+
   const activeLeadCount = useMemo(
     () =>
       visibleLeads.filter((l) => !['Dropped', 'Converted'].includes(l.status ?? 'New')).length,
@@ -1190,6 +1241,9 @@ export default function Dashboard() {
               addFormOpen={addLeadOpen}
               onAddFormOpenChange={setAddLeadOpen}
               managerColors={managerColors}
+              teamNames={teamNames}
+              teamLeads={teamLeads}
+              existingAccounts={existingAccounts}
             />
           )}
 
@@ -1225,6 +1279,8 @@ export default function Dashboard() {
                 onOppUpdated={handleOppUpdated}
                 onOppAdded={handleOppAdded}
                 onOppDeleted={handleOppDeleted}
+                teamNames={teamNames}
+                teamOpps={teamOpps}
               />
             </div>
           )}

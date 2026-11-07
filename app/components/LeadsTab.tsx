@@ -147,6 +147,9 @@ export default function LeadsTab({
   addFormOpen = false,
   onAddFormOpenChange,
   managerColors = {},
+  teamNames = [],
+  teamLeads = [],
+  existingAccounts = [],
 }: {
   /** Lead data owned by the Dashboard so the banner/analytics stay in sync. */
   leads: Lead[]
@@ -166,6 +169,13 @@ export default function LeadsTab({
   addFormOpen?: boolean
   onAddFormOpenChange?: (v: boolean) => void
   managerColors?: Record<string, string>
+  /** Territory teammates (same Territory in Users) — enables the Team view. */
+  teamNames?: string[]
+  /** Teammates' leads, shown read-only when Team view is on. */
+  teamLeads?: Lead[]
+  /** Every account in the CRM (leads + opportunities, all owners) — powers
+   *  the duplicate warning when creating a lead. */
+  existingAccounts?: { account: string; owner: string; kind: string }[]
 }) {
   const [statusFilter, setStatusFilter] = useState('')
   const [search, setSearch] = useState('')
@@ -186,6 +196,11 @@ export default function LeadsTab({
   const [sortKey, setSortKey] = useState('')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const searchRef = useRef<HTMLInputElement>(null)
+
+  // Team view: also show territory teammates' leads (read-only).
+  const [teamView, setTeamView] = useState(false)
+  const teamLeadIds = useMemo(() => new Set(teamLeads.map((l) => l.id)), [teamLeads])
+  const isTeamLead = useCallback((l: Lead) => teamLeadIds.has(l.id), [teamLeadIds])
 
   function handleSort(field: string) {
     if (!field) return
@@ -236,9 +251,14 @@ export default function LeadsTab({
     [notesByLead],
   )
 
+  const sourceLeads = useMemo(
+    () => (teamView && teamLeads.length > 0 ? [...leads, ...teamLeads] : leads),
+    [teamView, leads, teamLeads],
+  )
+
   const visible = useMemo(
     () =>
-      leads.filter((l) => {
+      sourceLeads.filter((l) => {
         if (statusFilter && (l.status ?? 'New') !== statusFilter) return false
         if (filterManager && (l.owner ?? '').toLowerCase() !== filterManager.toLowerCase())
           return false
@@ -259,7 +279,7 @@ export default function LeadsTab({
         return true
       }),
     [
-      leads,
+      sourceLeads,
       statusFilter,
       filterManager,
       filterCountry,
@@ -690,6 +710,24 @@ export default function LeadsTab({
 
       {/* ── Status chips ──────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-2">
+        {/* Team view — managers sharing this user's Territory (read-only) */}
+        {teamNames.length > 0 && (
+          <div className="mr-4 flex overflow-hidden rounded-xl border border-gray-200 bg-gray-50 text-sm font-medium">
+            <button
+              onClick={() => setTeamView(false)}
+              className={`px-3 py-1.5 transition-colors ${!teamView ? 'bg-gray-800 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+            >
+              My records
+            </button>
+            <button
+              onClick={() => setTeamView(true)}
+              title={`Read-only view of your territory teammates: ${teamNames.join(', ')}`}
+              className={`px-3 py-1.5 transition-colors ${teamView ? 'bg-gray-800 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+            >
+              👁 Team
+            </button>
+          </div>
+        )}
         <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">
           Status:
         </span>
@@ -912,6 +950,7 @@ export default function LeadsTab({
             <tbody className="divide-y divide-gray-100 bg-white">
               {sorted.map((lead) => {
                 const converted = (lead.status ?? '') === 'Converted'
+                const teamRow = isTeamLead(lead)
                 // Behind on follow-up schedule → tint the whole row.
                 const fuOverdue =
                   !converted &&
@@ -945,6 +984,14 @@ export default function LeadsTab({
                     {/* Sales Manager */}
                     <td className="whitespace-nowrap px-4 py-3 text-gray-600">
                       {lead.owner || '—'}
+                      {teamRow && (
+                        <span
+                          className="ml-1.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700"
+                          title="Teammate's record — view only"
+                        >
+                          👁
+                        </span>
+                      )}
                     </td>
                     {/* Contact */}
                     <td className="px-4 py-3">
@@ -1020,7 +1067,7 @@ export default function LeadsTab({
                     {/* Actions — convert + delete */}
                     <td className="whitespace-nowrap px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1.5">
-                        {!readOnly && !converted && (
+                        {!readOnly && !converted && !teamRow && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
@@ -1037,7 +1084,7 @@ export default function LeadsTab({
                             ✓ In Opportunities
                           </span>
                         )}
-                        {!readOnly && (
+                        {!readOnly && !teamRow && (
                           <button
                             onClick={(e) => handleRowDelete(e, lead)}
                             disabled={deletingId === lead.id}
@@ -1103,8 +1150,20 @@ export default function LeadsTab({
           >
             {/* Fixed header */}
             <div className="flex shrink-0 items-center justify-between border-b border-zinc-100 px-6 py-4">
-              <h3 className="text-base font-bold text-gray-900">
-                {editing === 'new' ? 'New Lead' : 'Edit Lead'}
+              <h3 className="flex items-center gap-2 text-base font-bold text-gray-900">
+                {editing === 'new'
+                  ? 'New Lead'
+                  : isTeamLead(editing as Lead)
+                    ? 'Lead'
+                    : 'Edit Lead'}
+                {editing !== 'new' && isTeamLead(editing as Lead) && (
+                  <span
+                    className="rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700"
+                    title="Team view — this record belongs to a colleague"
+                  >
+                    👁 View only — owned by {(editing as Lead).owner}
+                  </span>
+                )}
               </h3>
               <button
                 onClick={() => setEditing(null)}
@@ -1123,8 +1182,13 @@ export default function LeadsTab({
               </button>
             </div>
 
-            {/* Scrollable body */}
+            {/* Scrollable body — fieldset cascades disabled to every input
+                when viewing a teammate's lead (display:contents keeps layout) */}
             <div className="flex-1 overflow-y-auto px-6 py-5">
+              <fieldset
+                disabled={editing !== 'new' && isTeamLead(editing as Lead)}
+                className="contents"
+              >
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">
@@ -1137,6 +1201,22 @@ export default function LeadsTab({
                     value={form.account}
                     onChange={(e) => setForm((f) => ({ ...f, account: e.target.value }))}
                   />
+                  {/* Duplicate guard: warn when this account already exists
+                      anywhere in the CRM (any owner, lead or opportunity). */}
+                  {editing === 'new' &&
+                    (() => {
+                      const norm = (s: string) => s.trim().toLowerCase()
+                      const dup = form.account.trim()
+                        ? existingAccounts.find((a) => norm(a.account) === norm(form.account))
+                        : undefined
+                      return dup ? (
+                        <p className="mt-1 rounded-lg bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">
+                          ⚠ {dup.account} already exists as a {dup.kind}
+                          {dup.owner ? `, owned by ${dup.owner}` : ''} — check before creating a
+                          duplicate.
+                        </p>
+                      ) : null
+                    })()}
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">
@@ -1358,39 +1438,57 @@ export default function LeadsTab({
                   </div>
                 )}
               </div>
+              </fieldset>
 
               {formError && <p className="mt-3 text-xs text-red-500">{formError}</p>}
             </div>
 
-            {/* Fixed footer — actions always visible */}
+            {/* Fixed footer — actions always visible (view-only: just Close) */}
             <div className="flex shrink-0 items-center justify-between border-t border-zinc-100 px-6 py-4">
-              <div>
-                {editing !== 'new' && (
+              {editing !== 'new' && isTeamLead(editing as Lead) ? (
+                <>
+                  <span className="text-xs text-gray-400">
+                    Owned by {(editing as Lead).owner} — contact them before acting on this
+                    account.
+                  </span>
                   <button
-                    onClick={() => deleteLead(editing as Lead)}
-                    className="rounded-lg px-3 py-2 text-sm font-medium text-red-500 transition-colors hover:bg-red-50"
+                    onClick={() => setEditing(null)}
+                    className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-700"
                   >
-                    Delete
+                    Close
                   </button>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                {editing !== 'new' && (
-                  <button
-                    onClick={() => startConvert(editing as Lead)}
-                    className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-400"
-                  >
-                    Convert to Opportunity →
-                  </button>
-                )}
-                <button
-                  onClick={saveLead}
-                  disabled={busy}
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:opacity-50"
-                >
-                  {busy ? 'Saving…' : 'Save Lead'}
-                </button>
-              </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    {editing !== 'new' && (
+                      <button
+                        onClick={() => deleteLead(editing as Lead)}
+                        className="rounded-lg px-3 py-2 text-sm font-medium text-red-500 transition-colors hover:bg-red-50"
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {editing !== 'new' && (
+                      <button
+                        onClick={() => startConvert(editing as Lead)}
+                        className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-400"
+                      >
+                        Convert to Opportunity →
+                      </button>
+                    )}
+                    <button
+                      onClick={saveLead}
+                      disabled={busy}
+                      className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:opacity-50"
+                    >
+                      {busy ? 'Saving…' : 'Save Lead'}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
