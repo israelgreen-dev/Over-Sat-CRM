@@ -1474,15 +1474,16 @@ export default function LeadsTab({
                     {editing !== 'new' && (
                       <button
                         onClick={() => startConvert(editing as Lead)}
-                        className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-400"
+                        title="Convert this lead into an opportunity"
+                        className="rounded-lg border border-emerald-200 px-2.5 py-1.5 text-xs font-medium text-emerald-600 transition-colors hover:bg-emerald-50"
                       >
-                        Convert to Opportunity →
+                        Convert →
                       </button>
                     )}
                     <button
                       onClick={saveLead}
                       disabled={busy}
-                      className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:opacity-50"
+                      className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-bold text-white transition-colors hover:bg-blue-500 disabled:opacity-50"
                     >
                       {busy ? 'Saving…' : 'Save Lead'}
                     </button>
