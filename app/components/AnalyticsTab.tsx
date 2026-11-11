@@ -1,6 +1,8 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import { supabase } from '@/lib/supabase'
+import { followUpStatus, inDaysISO } from './FollowUpField'
 import {
   BarChart,
   Bar,
@@ -161,6 +163,77 @@ export default function AnalyticsTab({
   probabilityDefaults?: Record<string, number>
 }) {
   const [selectedQuarter, setSelectedQuarter] = useState<string>('')
+
+  // ── Leads by Sales Manager (management report) ─────────────────────────────
+  // Leads that carry at least one note (legacy description counts as one).
+  const [notedLeadIds, setNotedLeadIds] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    let cancelled = false
+    supabase
+      .from('lead_notes')
+      .select('lead_id')
+      .then(({ data }) => {
+        if (!cancelled && data) setNotedLeadIds(new Set(data.map((n) => n.lead_id as string)))
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [leads])
+
+  const leadReport = useMemo(() => {
+    const todayISO = inDaysISO(0)
+    const weekAhead = inDaysISO(7)
+    const owners = Array.from(
+      new Set([...managers, ...leads.map((l) => l.owner ?? '').filter(Boolean)]),
+    )
+    const isOpen = (l: Lead) => !['Dropped', 'Converted'].includes(l.status ?? 'New')
+    const rows = owners
+      .map((name) => {
+        const ls = leads.filter((l) => (l.owner ?? '').toLowerCase() === name.toLowerCase())
+        const st = (s: string) => ls.filter((l) => (l.status ?? 'New') === s).length
+        return {
+          name,
+          total: ls.length,
+          high: ls.filter((l) => (l.priority ?? '') === 'High').length,
+          news: st('New'),
+          contacted: st('Contacted'),
+          qualified: st('Qualified'),
+          converted: st('Converted'),
+          withNotes: ls.filter((l) => notedLeadIds.has(l.id) || !!l.description?.trim()).length,
+          overdue: ls.filter((l) => isOpen(l) && followUpStatus(l.follow_up_at) === 'overdue')
+            .length,
+          dueWeek: ls.filter(
+            (l) =>
+              isOpen(l) &&
+              !!l.follow_up_at &&
+              l.follow_up_at >= todayISO &&
+              l.follow_up_at <= weekAhead,
+          ).length,
+          scheduled: ls.filter((l) => isOpen(l) && !!l.follow_up_at && l.follow_up_at > weekAhead)
+            .length,
+          noDate: ls.filter((l) => !l.follow_up_at).length,
+        }
+      })
+      .filter((r) => r.total > 0)
+      .sort((a, b) => b.total - a.total)
+    const keys = [
+      'total',
+      'high',
+      'news',
+      'contacted',
+      'qualified',
+      'converted',
+      'withNotes',
+      'overdue',
+      'dueWeek',
+      'scheduled',
+      'noDate',
+    ] as const
+    const totals = Object.fromEntries(
+      keys.map((k) => [k, rows.reduce((s, r) => s + r[k], 0)]),
+    ) as Record<(typeof keys)[number], number>
+    return { rows, totals }
+  }, [leads, managers, notedLeadIds])
 
   const opps = useMemo(() => {
     if (!selectedQuarter) return opportunities
@@ -665,6 +738,130 @@ export default function AnalyticsTab({
           </>
         )}
       </Section>
+
+      {/* ── Leads by Sales Manager (management report) ────────────────────── */}
+      {leadReport.rows.length > 0 && (
+        <Section
+          title="Leads by Sales Manager"
+          subtitle="Workload, status mix and follow-up discipline per manager — the management view"
+        >
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="bg-slate-800 text-white">
+                  {[
+                    'Sales Manager',
+                    'Total Leads',
+                    'High Priority',
+                    'New',
+                    'Contacted',
+                    'Qualified',
+                    'Converted',
+                    'With Notes',
+                    'Follow-Up Overdue',
+                    'Due This Week',
+                    'Follow-Up Scheduled',
+                    'No Follow-Up Date',
+                  ].map((h, i) => (
+                    <th
+                      key={h}
+                      className={`whitespace-nowrap px-3 py-2.5 text-xs font-semibold ${i === 0 ? 'rounded-l-lg text-left' : 'text-center'} ${i === 11 ? 'rounded-r-lg' : ''}`}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {leadReport.rows.map((r) => (
+                  <tr key={r.name} className="transition-colors hover:bg-gray-50">
+                    <td className="whitespace-nowrap px-3 py-2.5 font-semibold text-gray-900">
+                      <span className="inline-flex items-center gap-2">
+                        <span
+                          className="h-2.5 w-2.5 rounded-full"
+                          style={{ backgroundColor: managerColors[r.name] ?? '#94a3b8' }}
+                        />
+                        {r.name}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2.5 text-center font-bold tabular-nums text-gray-900">
+                      {r.total}
+                    </td>
+                    <td className="px-3 py-2.5 text-center tabular-nums">
+                      {r.high > 0 ? <span className="font-semibold text-red-600">{r.high}</span> : 0}
+                    </td>
+                    <td className="px-3 py-2.5 text-center tabular-nums text-blue-600">{r.news}</td>
+                    <td className="px-3 py-2.5 text-center tabular-nums text-amber-600">
+                      {r.contacted}
+                    </td>
+                    <td className="px-3 py-2.5 text-center tabular-nums text-green-600">
+                      {r.qualified}
+                    </td>
+                    <td className="px-3 py-2.5 text-center tabular-nums text-emerald-600">
+                      {r.converted}
+                    </td>
+                    <td className="px-3 py-2.5 text-center tabular-nums text-gray-700">
+                      {r.withNotes}
+                    </td>
+                    <td className="px-3 py-2.5 text-center tabular-nums">
+                      {r.overdue > 0 ? (
+                        <span className="rounded-full bg-red-50 px-2 py-0.5 font-bold text-red-600">
+                          {r.overdue}
+                        </span>
+                      ) : (
+                        0
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 text-center tabular-nums text-amber-600">
+                      {r.dueWeek}
+                    </td>
+                    <td className="px-3 py-2.5 text-center tabular-nums text-gray-700">
+                      {r.scheduled}
+                    </td>
+                    <td className="px-3 py-2.5 text-center tabular-nums">
+                      {r.noDate > 0 ? (
+                        <span className="font-semibold text-gray-500">{r.noDate}</span>
+                      ) : (
+                        0
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                <tr className="bg-slate-50 font-bold text-gray-900">
+                  <td className="whitespace-nowrap rounded-l-lg px-3 py-2.5">TOTAL</td>
+                  <td className="px-3 py-2.5 text-center tabular-nums">{leadReport.totals.total}</td>
+                  <td className="px-3 py-2.5 text-center tabular-nums">{leadReport.totals.high}</td>
+                  <td className="px-3 py-2.5 text-center tabular-nums">{leadReport.totals.news}</td>
+                  <td className="px-3 py-2.5 text-center tabular-nums">
+                    {leadReport.totals.contacted}
+                  </td>
+                  <td className="px-3 py-2.5 text-center tabular-nums">
+                    {leadReport.totals.qualified}
+                  </td>
+                  <td className="px-3 py-2.5 text-center tabular-nums">
+                    {leadReport.totals.converted}
+                  </td>
+                  <td className="px-3 py-2.5 text-center tabular-nums">
+                    {leadReport.totals.withNotes}
+                  </td>
+                  <td className="px-3 py-2.5 text-center tabular-nums text-red-600">
+                    {leadReport.totals.overdue}
+                  </td>
+                  <td className="px-3 py-2.5 text-center tabular-nums">
+                    {leadReport.totals.dueWeek}
+                  </td>
+                  <td className="px-3 py-2.5 text-center tabular-nums">
+                    {leadReport.totals.scheduled}
+                  </td>
+                  <td className="rounded-r-lg px-3 py-2.5 text-center tabular-nums">
+                    {leadReport.totals.noDate}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </Section>
+      )}
 
       {/* ── Achievement per manager ───────────────────────────────────────── */}
       <Section title="Annual Target Achievement" subtitle="Win progress vs quota per manager">

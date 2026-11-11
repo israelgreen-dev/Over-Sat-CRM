@@ -8,6 +8,7 @@ import FollowUpField, {
   FollowUpCell,
   followUpSortValue,
   followUpStatus,
+  inDaysISO,
 } from './FollowUpField'
 import {
   type Opportunity,
@@ -102,7 +103,8 @@ const emptyForm = (owner: string): LeadForm => ({
   opportunity_type: '',
   priority: 'Medium',
   description: '',
-  follow_up_at: '',
+  // Follow-up is mandatory on new leads — default to two weeks out.
+  follow_up_at: inDaysISO(14),
 })
 
 const updatedFmt = new Intl.DateTimeFormat('en-GB', {
@@ -364,6 +366,10 @@ export default function LeadsTab({
       setFormError('Account is required.')
       return
     }
+    if (editing === 'new' && !form.follow_up_at) {
+      setFormError('Next Follow-up date is required — pick a date or a quick option.')
+      return
+    }
     setBusy(true)
     setFormError(null)
     const payload: Record<string, unknown> = {
@@ -539,7 +545,9 @@ export default function LeadsTab({
       website: converting.website || null,
       source: converting.source || null,
       priority: converting.priority || null,
-      follow_up_at: converting.follow_up_at || null,
+      // Every opportunity carries a follow-up — inherit the lead's, or
+      // default to two weeks out if the (older) lead never had one.
+      follow_up_at: converting.follow_up_at || inDaysISO(14),
     }
     let data: Opportunity[] | null = null
     let error: { message: string } | null = null
@@ -1401,7 +1409,7 @@ export default function LeadsTab({
                 </div>
                 <div className="col-span-2">
                   <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">
-                    Next Follow-up
+                    Next Follow-up {editing === 'new' ? '*' : ''}
                   </label>
                   <FollowUpField
                     value={form.follow_up_at}

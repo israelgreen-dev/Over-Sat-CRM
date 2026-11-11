@@ -13,7 +13,7 @@ const QUICK_PICKS: { label: string; days: number }[] = [
 ]
 
 /** yyyy-mm-dd for `days` from today, in local time. */
-function inDaysISO(days: number): string {
+export function inDaysISO(days: number): string {
   const d = new Date()
   d.setDate(d.getDate() + days)
   const p = (n: number) => String(n).padStart(2, '0')

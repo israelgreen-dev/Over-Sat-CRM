@@ -20,7 +20,7 @@ import {
   PRIORITY_ICONS,
   COUNTRIES,
 } from '@/lib/opportunity'
-import FollowUpField from './FollowUpField'
+import FollowUpField, { inDaysISO } from './FollowUpField'
 
 type Draft = {
   name: string
@@ -1054,7 +1054,8 @@ export function AddOpportunityModal({
     product: '',
     status: 'On Track',
     close_date: '',
-    follow_up_at: '',
+    // Follow-up is mandatory on new opportunities — default to two weeks out.
+    follow_up_at: inDaysISO(14),
     value: '',
     currency: 'USD',
     probability: null as number | null,
@@ -1075,7 +1076,8 @@ export function AddOpportunityModal({
     if (defaultOwner) setForm((f) => ({ ...f, owner: f.owner || defaultOwner }))
   }, [defaultOwner])
 
-  const canSubmit = form.name.trim() !== '' && form.customer_name.trim() !== ''
+  const canSubmit =
+    form.name.trim() !== '' && form.customer_name.trim() !== '' && form.follow_up_at !== ''
 
   async function handleSubmit() {
     setSaving(true)
@@ -1502,7 +1504,7 @@ export function AddOpportunityModal({
             </select>
           </Field>
 
-          <Field label="Next Follow-up">
+          <Field label="Next Follow-up *">
             <FollowUpField
               value={form.follow_up_at}
               onChange={(v) => setForm((f) => ({ ...f, follow_up_at: v }))}
