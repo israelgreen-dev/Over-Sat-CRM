@@ -15,8 +15,6 @@ import {
   Pie,
   Cell,
   Legend,
-  LineChart,
-  Line,
 } from 'recharts'
 import {
   type Opportunity,
@@ -102,28 +100,6 @@ function Section({
         {subtitle && <p className="mt-0.5 text-xs text-gray-400">{subtitle}</p>}
       </div>
       {children}
-    </div>
-  )
-}
-
-function KPI({
-  label,
-  value,
-  sub,
-  color = 'text-slate-900',
-  bg = 'bg-gray-50',
-}: {
-  label: string
-  value: string
-  sub?: string
-  color?: string
-  bg?: string
-}) {
-  return (
-    <div className={`rounded-xl border border-gray-100 ${bg} p-4`}>
-      <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">{label}</p>
-      <p className={`mt-1 text-2xl font-bold ${color}`}>{value}</p>
-      {sub && <p className="mt-0.5 text-xs text-gray-400">{sub}</p>}
     </div>
   )
 }
@@ -471,11 +447,13 @@ export default function AnalyticsTab({
     .filter((r) => r.total > 0)
     .sort((a, b) => b.total - a.total)
 
+  // No-date wins would be invisible on the quarterly chart — surface them.
+  const noDateWins = qActual['No Date'] ?? 0
+
   return (
     <div className="space-y-6">
-      {/* ── Year + Quarter quick filters ─────────────────────────────────── */}
+      {/* ── Filters ───────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-4">
-        {/* Year */}
         {availableYears.length > 0 && (
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">
@@ -499,8 +477,6 @@ export default function AnalyticsTab({
             ))}
           </div>
         )}
-
-        {/* Quarter */}
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">
             Quarter:
@@ -528,217 +504,394 @@ export default function AnalyticsTab({
               {label}
             </button>
           ))}
-          <button
-            onClick={() => setSelectedQuarter(selectedQuarter === 'No Date' ? '' : 'No Date')}
-            className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
-              selectedQuarter === 'No Date'
-                ? 'bg-slate-500 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-          >
-            No Date
-          </button>
         </div>
       </div>
 
-      <div>
-        <h2 className="text-base font-bold text-gray-900">Analytics — {selectedYear}</h2>
-        <p className="mt-0.5 text-sm text-gray-400">
-          Full pipeline and performance intelligence for {selectedYear}.
-        </p>
+      {/* ── Hero KPIs — the company picture in one row ────────────────────── */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-6">
+        <KpiTile
+          label="Annual Target"
+          value={fmtShort(overallTarget)}
+          sub="sum of manager quotas"
+          accent="border-blue-500"
+        />
+        <KpiTile
+          label="Total Won"
+          value={fmtShort(totalWin)}
+          sub={`${wins.length} deal${wins.length !== 1 ? 's' : ''} closed`}
+          accent="border-emerald-500"
+          valueClass="text-emerald-600"
+          progress={overallTarget > 0 ? Math.min(achievementPct, 100) : undefined}
+          progressLabel={`${achievementPct}% of target`}
+        />
+        <KpiTile
+          label="Gap to Target"
+          value={fmtShort(Math.abs(overallTarget - totalWin))}
+          sub={overallTarget - totalWin <= 0 ? 'target exceeded ✓' : 'left to close'}
+          accent={overallTarget - totalWin <= 0 ? 'border-emerald-500' : 'border-amber-500'}
+          valueClass={overallTarget - totalWin <= 0 ? 'text-emerald-600' : 'text-amber-600'}
+        />
+        <KpiTile
+          label="Open Pipeline"
+          value={fmtShort(totalPipeline)}
+          sub={`${active.length} active deal${active.length !== 1 ? 's' : ''}`}
+          accent="border-indigo-500"
+          valueClass="text-indigo-600"
+        />
+        <KpiTile
+          label="Weighted Forecast"
+          value={fmtShort(weightedPipeline)}
+          sub="pipeline × probability"
+          accent="border-violet-500"
+          valueClass="text-violet-600"
+        />
+        <KpiTile
+          label="Win Rate"
+          value={`${winRateCount}%`}
+          sub={`${winRateValue}% by value · avg win ${fmtShort(avgWin)}`}
+          accent="border-slate-400"
+        />
       </div>
 
-      {/* ── Executive Summary ─────────────────────────────────────────────── */}
-      <Section
-        title="Executive Summary"
-        subtitle={`${opps.length} opportunities in ${selectedYear}`}
-      >
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          <KPI label="Overall Target" value={fmtShort(overallTarget)} sub="annual team quota" />
-          <KPI
-            label="Total Win"
-            value={fmtShort(totalWin)}
-            sub={`${wins.length} deals`}
-            color="text-green-600"
-            bg="bg-green-50"
-          />
-          <KPI
-            label="Achievement"
-            value={`${achievementPct}%`}
-            sub="Win vs Target"
-            color={
-              achievementPct >= 100
-                ? 'text-green-600'
-                : achievementPct >= 70
-                  ? 'text-amber-500'
-                  : 'text-red-500'
-            }
-          />
-          <KPI
-            label="Open Pipeline"
-            value={fmtShort(totalPipeline)}
-            sub={`${active.length} active`}
-            color="text-blue-600"
-            bg="bg-blue-50"
-          />
-          <KPI
-            label="Weighted Pipeline"
-            value={fmtShort(weightedPipeline)}
-            sub="prob-adjusted"
-            color="text-indigo-600"
-            bg="bg-indigo-50"
-          />
-        </div>
-        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <KPI
-            label="Avg. Deal Size"
-            value={fmtShort(active.length > 0 ? totalPipeline / active.length : 0)}
-            sub="per active deal"
-          />
-          <KPI
-            label="Win Rate (count)"
-            value={`${winRateCount}%`}
-            sub={`${wins.length} of ${opps.length}`}
-          />
-          <KPI
-            label="Win Rate (value)"
-            value={`${winRateValue}%`}
-            sub="won vs total pipeline"
-          />
-          <KPI label="Avg. Win Value" value={fmtShort(avgWin)} sub="per won deal" />
-        </div>
-        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <KPI
-            label="Total Lost"
-            value={fmtShort(totalLostValue)}
-            sub={`${losses.length} deals`}
-            color="text-red-500"
-          />
-          <KPI
-            label="Avg. Loss Value"
-            value={fmtShort(avgLoss)}
-            sub="per lost deal"
-            color="text-red-500"
-          />
-          <KPI
-            label="Total Forecast"
-            value={fmtShort(totalForecast)}
-            sub="open + won, excl. lost"
-          />
-          <KPI
-            label="Opportunities"
-            value={String(opps.length)}
-            sub={`${active.length} active · ${wins.length} won · ${losses.length} lost`}
-          />
-        </div>
-      </Section>
+      {/* ── Target vs Actual ──────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Section title="Planned vs Actual" subtitle="Quarterly target against closed-won value">
+          {hasPlanVsActual ? (
+            <>
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={planVsActualTrend} barGap={2} barCategoryGap="28%">
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+                  <XAxis
+                    dataKey="quarter"
+                    tick={{ fontSize: 12, fill: '#6b7280' }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tickFormatter={fmtShort}
+                    tick={{ fontSize: 11, fill: '#9ca3af' }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={52}
+                  />
+                  <Tooltip formatter={(v) => fmtFull(Number(v))} cursor={{ fill: '#f9fafb' }} />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Bar dataKey="Planned" fill="#d97706" radius={[4, 4, 0, 0]} maxBarSize={36} />
+                  <Bar dataKey="Actual" fill="#2563eb" radius={[4, 4, 0, 0]} maxBarSize={36} />
+                </BarChart>
+              </ResponsiveContainer>
+              {noDateWins > 0 && (
+                <p className="mt-2 text-xs text-amber-600">
+                  + {fmtShort(noDateWins)} won without a close date — not shown on the quarters
+                  above.
+                </p>
+              )}
+            </>
+          ) : (
+            <Empty />
+          )}
+        </Section>
 
-      {/* ── Lead funnel ───────────────────────────────────────────────────── */}
-      <Section
-        title="Lead Funnel"
-        subtitle="Top of the pipeline — leads by status and conversion into opportunities"
-      >
-        {leads.length === 0 ? (
-          <p className="py-8 text-center text-sm text-gray-400">
-            No leads{selectedYear !== 'All Years' ? ` created in ${selectedYear}` : ' yet'} —
-            capture prospects with the green{' '}
-            <span className="font-semibold text-emerald-600">+ New Lead</span> button.
-          </p>
-        ) : (
-          <>
-            <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <KPI
-                label="Total Leads"
-                value={String(leads.length)}
-                sub={selectedYear === 'All Years' ? 'all years' : `created in ${selectedYear}`}
-              />
-              <KPI
-                label="Active Leads"
-                value={String(activeLeads)}
-                sub="new · contacted · qualified"
-                color="text-blue-600"
-                bg="bg-blue-50"
-              />
-              <KPI
-                label="Converted"
-                value={String(convertedLeads)}
-                sub="became opportunities"
-                color="text-emerald-600"
-                bg="bg-emerald-50"
-              />
-              <KPI
-                label="Conversion Rate"
-                value={`${leadConversion}%`}
-                sub="of decided leads (converted vs dropped)"
-                color={leadConversion >= 50 ? 'text-emerald-600' : 'text-amber-500'}
-              />
+        <Section
+          title="Achievement by Manager"
+          subtitle="Won value against each manager's annual target"
+        >
+          {mgrData.length === 0 ? (
+            <Empty />
+          ) : (
+            <div className="space-y-3.5">
+              {mgrData.map((m) => {
+                const p = m.target > 0 ? Math.min(Math.round((m.winAmt / m.target) * 100), 100) : 0
+                const achieved = m.target > 0 && m.winAmt >= m.target
+                return (
+                  <div key={m.name}>
+                    <div className="mb-1 flex items-baseline justify-between gap-2">
+                      <span className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
+                        <span
+                          className="h-2.5 w-2.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: m.color }}
+                        />
+                        {m.name}
+                      </span>
+                      <span className="whitespace-nowrap text-xs tabular-nums text-gray-500">
+                        {fmtShort(m.winAmt)} / {m.target > 0 ? fmtShort(m.target) : '—'}
+                        <span
+                          className={`ml-2 rounded-full px-2 py-0.5 font-bold ${
+                            achieved
+                              ? 'bg-emerald-50 text-emerald-600'
+                              : m.target > 0
+                                ? 'bg-blue-50 text-blue-600'
+                                : 'bg-gray-100 text-gray-400'
+                          }`}
+                        >
+                          {m.target > 0
+                            ? `${Math.round((m.winAmt / m.target) * 100)}%`
+                            : 'no target'}
+                        </span>
+                      </span>
+                    </div>
+                    <div className="h-2.5 w-full overflow-hidden rounded-full bg-gray-100">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{ width: `${p}%`, backgroundColor: m.color }}
+                      />
+                    </div>
+                    <p className="mt-0.5 text-[11px] text-gray-400">
+                      {fmtShort(m.pipeline)} still in pipeline · {m.winCount} won · {m.lossCount}{' '}
+                      lost
+                    </p>
+                  </div>
+                )
+              })}
             </div>
+          )}
+        </Section>
+      </div>
 
-            {/* Status bars */}
+      {/* ── Pipeline ──────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Section
+          title="Pipeline by Stage"
+          subtitle="Deal value and count at every stage of the funnel"
+        >
+          {opps.length === 0 ? (
+            <Empty />
+          ) : (
             <div className="space-y-3">
-              {leadStageCounts.map(({ status, count, fill }) => (
-                <div key={status} className="flex items-center gap-3">
-                  <div className="w-24 shrink-0 text-right">
-                    <span className="text-xs font-semibold text-gray-700">{status}</span>
+              {stageData.map(({ stage, count, value }) => (
+                <div key={stage} className="flex items-center gap-3">
+                  <div className="w-24 shrink-0 text-right text-xs font-semibold text-gray-700">
+                    {stage}
                   </div>
                   <div className="flex-1">
-                    <div className="h-3 w-full overflow-hidden rounded-full bg-gray-100">
+                    <div className="h-3.5 w-full overflow-hidden rounded-full bg-gray-100">
                       <div
                         className="h-full rounded-full transition-all"
                         style={{
-                          width: `${(count / maxLeadCount) * 100}%`,
-                          backgroundColor: fill,
+                          width: `${(value / maxStageVal) * 100}%`,
+                          backgroundColor: STAGE_COLORS[stage],
                         }}
                       />
                     </div>
                   </div>
-                  <div className="w-10 shrink-0 text-right text-sm font-bold text-gray-900">
-                    {count}
+                  <div className="w-28 shrink-0 text-right text-xs tabular-nums">
+                    <span className="font-bold text-gray-900">{fmtShort(value)}</span>
+                    <span className="ml-1 text-gray-400">· {count}</span>
                   </div>
                 </div>
               ))}
             </div>
+          )}
+        </Section>
 
-            {/* Per-manager breakdown */}
-            {leadMgrRows.length > 0 && (
-              <div className="mt-5">
-                <div className="mb-2 grid grid-cols-6 gap-2 text-xs font-semibold uppercase tracking-wider text-gray-400">
-                  <div className="col-span-2">Manager</div>
-                  <div className="text-right">Leads</div>
-                  <div className="text-right">Active</div>
-                  <div className="text-right">Converted</div>
-                  <div className="text-right">Conv. Rate</div>
-                </div>
-                <div className="space-y-2">
-                  {leadMgrRows.map((r) => (
-                    <div
-                      key={r.name}
-                      className="grid grid-cols-6 items-center gap-2 rounded-xl bg-gray-50 px-3 py-2"
-                    >
-                      <div className="col-span-2 text-sm font-semibold text-gray-900">
-                        {r.name}
-                      </div>
-                      <div className="text-right text-sm text-gray-700">{r.total}</div>
-                      <div className="text-right text-sm text-blue-600">{r.active}</div>
-                      <div className="text-right text-sm font-semibold text-emerald-600">
-                        {r.converted}
-                      </div>
-                      <div className="text-right">
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-xs font-semibold ${r.rate >= 50 ? 'bg-green-100 text-green-700' : r.rate > 0 ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'}`}
-                        >
-                          {r.rate}%
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+        <Section
+          title="Open Deal Health"
+          subtitle="Status of active deals, and what a typical outcome is worth"
+        >
+          {active.length === 0 ? (
+            <Empty />
+          ) : (
+            <div className="flex flex-wrap items-center gap-6">
+              <ResponsiveContainer width={180} height={180}>
+                <PieChart>
+                  <Pie
+                    data={statusData}
+                    dataKey="count"
+                    nameKey="status"
+                    innerRadius={48}
+                    outerRadius={78}
+                    paddingAngle={3}
+                    strokeWidth={2}
+                  >
+                    {statusData.map((s) => (
+                      <Cell key={s.status} fill={STATUS_COLORS[s.status] ?? '#94a3b8'} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(v, n) => [`${Number(v)} deals`, String(n)]} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="min-w-[160px] flex-1 space-y-2">
+                {statusData.map((s) => (
+                  <div key={s.status} className="flex items-center justify-between text-sm">
+                    <span className="inline-flex items-center gap-2 text-gray-700">
+                      <span
+                        className="h-2.5 w-2.5 rounded-full"
+                        style={{ backgroundColor: STATUS_COLORS[s.status] ?? '#94a3b8' }}
+                      />
+                      {s.status}
+                    </span>
+                    <span className="font-bold tabular-nums text-gray-900">{s.count}</span>
+                  </div>
+                ))}
+                <div className="mt-3 grid grid-cols-2 gap-2 border-t border-gray-100 pt-3">
+                  <div className="rounded-lg bg-emerald-50 px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-600">
+                      Avg Won Deal
+                    </p>
+                    <p className="text-sm font-bold text-emerald-700">{fmtShort(avgWin)}</p>
+                  </div>
+                  <div className="rounded-lg bg-red-50 px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-red-500">
+                      Avg Lost Deal
+                    </p>
+                    <p className="text-sm font-bold text-red-600">{fmtShort(avgLoss)}</p>
+                  </div>
                 </div>
               </div>
-            )}
-          </>
-        )}
-      </Section>
+            </div>
+          )}
+        </Section>
+      </div>
 
+      {/* ── Lead engine & losses ──────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Section
+          title="Lead Engine"
+          subtitle="Top of the funnel — lead status and conversion into opportunities"
+        >
+          {leads.length === 0 ? (
+            <Empty />
+          ) : (
+            <>
+              <div className="mb-4 flex flex-wrap gap-2">
+                <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-600">
+                  {activeLeads} active
+                </span>
+                <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-600">
+                  {convertedLeads} converted
+                </span>
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-bold ${leadConversion >= 50 ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}
+                >
+                  {leadConversion}% conversion
+                </span>
+              </div>
+              <div className="space-y-2.5">
+                {leadStageCounts.map(({ status, count, fill }) => (
+                  <div key={status} className="flex items-center gap-3">
+                    <div className="w-20 shrink-0 text-right text-xs font-semibold text-gray-700">
+                      {status}
+                    </div>
+                    <div className="flex-1">
+                      <div className="h-3 w-full overflow-hidden rounded-full bg-gray-100">
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{
+                            width: `${(count / maxLeadCount) * 100}%`,
+                            backgroundColor: fill,
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div className="w-8 shrink-0 text-right text-xs font-bold tabular-nums text-gray-900">
+                      {count}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </Section>
+
+        <Section title="Loss Review" subtitle="Why deals are lost — learn from every closed-lost">
+          {losses.length === 0 ? (
+            <p className="py-8 text-center text-sm text-gray-400">
+              No lost deals in this period. 🎉
+            </p>
+          ) : (
+            <>
+              <div className="mb-4 flex flex-wrap gap-2">
+                <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-bold text-red-600">
+                  {losses.length} lost · {fmtShort(totalLostValue)}
+                </span>
+              </div>
+              <div className="space-y-2.5">
+                {lossData.map(({ reason, count }) => (
+                  <div key={reason} className="flex items-center gap-3">
+                    <div className="w-36 shrink-0 truncate text-right text-xs font-semibold text-gray-700">
+                      {reason}
+                    </div>
+                    <div className="flex-1">
+                      <div className="h-3 w-full overflow-hidden rounded-full bg-gray-100">
+                        <div
+                          className="h-full rounded-full bg-red-400 transition-all"
+                          style={{ width: `${(count / losses.length) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                    <div className="w-8 shrink-0 text-right text-xs font-bold tabular-nums text-gray-900">
+                      {count}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </Section>
+      </div>
+
+      {/* ── Where the business is ─────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Section title="Revenue by Product" subtitle="Deal value per product across the pipeline">
+          {prodData.length === 0 ? (
+            <Empty />
+          ) : (
+            <div className="space-y-2.5">
+              {prodData.slice(0, 8).map((p) => (
+                <div key={p.product} className="flex items-center gap-3">
+                  <div className="w-24 shrink-0 truncate text-right text-xs font-semibold text-gray-700">
+                    {p.product}
+                  </div>
+                  <div className="flex-1">
+                    <div className="h-3 w-full overflow-hidden rounded-full bg-gray-100">
+                      <div
+                        className="h-full rounded-full bg-blue-500 transition-all"
+                        style={{ width: `${(p.value / (prodData[0]?.value || 1)) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                  <div className="w-32 shrink-0 text-right text-xs tabular-nums">
+                    <span className="font-bold text-gray-900">{fmtShort(p.value)}</span>
+                    <span className="ml-1 text-gray-400">
+                      · {p.count} deal{p.count !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Section>
+
+        <Section title="Pipeline by Country" subtitle="Top markets by total deal value">
+          {cntryData.length === 0 ? (
+            <Empty />
+          ) : (
+            <div className="space-y-2.5">
+              {cntryData.slice(0, 8).map((c) => (
+                <div key={c.country} className="flex items-center gap-3">
+                  <div className="w-24 shrink-0 truncate text-right text-xs font-semibold text-gray-700">
+                    {c.country}
+                  </div>
+                  <div className="flex-1">
+                    <div className="h-3 w-full overflow-hidden rounded-full bg-gray-100">
+                      <div
+                        className="h-full rounded-full bg-cyan-600 transition-all"
+                        style={{ width: `${(c.value / (cntryData[0]?.value || 1)) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                  <div className="w-32 shrink-0 text-right text-xs tabular-nums">
+                    <span className="font-bold text-gray-900">{fmtShort(c.value)}</span>
+                    <span className="ml-1 text-gray-400">
+                      · {c.count} deal{c.count !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Section>
+      </div>
       {/* ── Leads by Sales Manager (management report) ────────────────────── */}
       {leadReport.rows.length > 0 && (
         <Section
@@ -862,740 +1015,48 @@ export default function AnalyticsTab({
           </div>
         </Section>
       )}
-
-      {/* ── Achievement per manager ───────────────────────────────────────── */}
-      <Section title="Annual Target Achievement" subtitle="Win progress vs quota per manager">
-        {mgrData.length === 0 ? (
-          <Empty />
-        ) : (
-          <div className="space-y-4">
-            {mgrData
-              .filter((m) => m.target > 0 || m.winAmt > 0)
-              .map((m) => (
-                <div key={m.name} className="space-y-1">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="font-semibold text-gray-900">{m.name}</span>
-                    <div className="flex items-center gap-4 text-xs">
-                      <span className="text-green-600 font-semibold">
-                        {fmtShort(m.winAmt)} won
-                      </span>
-                      <span className="text-gray-400">of {fmtShort(m.target)} target</span>
-                      <span className="font-bold" style={{ color: m.color }}>
-                        {pct(m.winAmt, m.target || 1)}%
-                      </span>
-                    </div>
-                  </div>
-                  <div className="relative h-3 w-full overflow-hidden rounded-full bg-gray-100">
-                    <div
-                      className="absolute left-0 top-0 h-full rounded-full transition-all"
-                      style={{
-                        width: `${Math.min(pct(m.winAmt, m.target || 1), 100)}%`,
-                        backgroundColor: m.color,
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-          </div>
-        )}
-      </Section>
-
-      {/* ── Charts row ────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Section title="Target vs Win vs Pipeline by Manager">
-          {mgrData.length === 0 ? (
-            <Empty />
-          ) : (
-            <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={barData} barGap={3} barCategoryGap="28%">
-                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
-                <XAxis
-                  dataKey="name"
-                  tick={{ fontSize: 11, fill: '#374151', fontWeight: 600 }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  tickFormatter={fmtShort}
-                  tick={{ fontSize: 11, fill: '#6b7280' }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={52}
-                />
-                <Tooltip
-                  formatter={(v) => fmtFull(Number(v))}
-                  contentStyle={{ borderRadius: 8, fontSize: 12 }}
-                />
-                <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
-                <Bar dataKey="Target" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Win" fill="#10b981" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Pipeline" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </Section>
-
-        <Section title="Sales Funnel" subtitle="Pipeline value and deal count per stage">
-          {opps.length === 0 ? <Empty /> : <SalesFunnel data={funnelData} />}
-        </Section>
-      </div>
-
-      {/* ── Planned vs Actual ─────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Section
-          title="Planned vs Actual — by Manager"
-          subtitle="Planned (target quota) vs actual won value per manager"
-        >
-          {!hasPlanVsActual ? (
-            <Empty />
-          ) : (
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={planVsActualByManager} barGap={4} barCategoryGap="30%">
-                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
-                <XAxis
-                  dataKey="name"
-                  tick={{ fontSize: 11, fill: '#374151', fontWeight: 600 }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  tickFormatter={fmtShort}
-                  tick={{ fontSize: 11, fill: '#6b7280' }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={56}
-                />
-                <Tooltip
-                  formatter={(v) => fmtFull(Number(v))}
-                  contentStyle={{ borderRadius: 8, fontSize: 12 }}
-                />
-                <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
-                <Bar
-                  dataKey="Planned"
-                  name="Planned (Target)"
-                  fill="#6366f1"
-                  radius={[4, 4, 0, 0]}
-                />
-                <Bar
-                  dataKey="Actual"
-                  name="Actual (Won)"
-                  fill="#10b981"
-                  radius={[4, 4, 0, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </Section>
-
-        <Section
-          title="Planned vs Actual — by Quarter"
-          subtitle="Quarterly planned target vs actual won value (incl. undated wins)"
-        >
-          {!hasPlanVsActual ? (
-            <Empty />
-          ) : (
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={planVsActualByQuarter} barGap={4} barCategoryGap="30%">
-                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
-                <XAxis
-                  dataKey="quarter"
-                  tick={{ fontSize: 11, fill: '#374151', fontWeight: 600 }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  tickFormatter={fmtShort}
-                  tick={{ fontSize: 11, fill: '#6b7280' }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={56}
-                />
-                <Tooltip
-                  formatter={(v) => fmtFull(Number(v))}
-                  contentStyle={{ borderRadius: 8, fontSize: 12 }}
-                />
-                <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
-                <Bar
-                  dataKey="Planned"
-                  name="Planned (Target)"
-                  fill="#6366f1"
-                  radius={[4, 4, 0, 0]}
-                />
-                <Bar
-                  dataKey="Actual"
-                  name="Actual (Won)"
-                  fill="#10b981"
-                  radius={[4, 4, 0, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </Section>
-      </div>
-
-      {/* ── Planned vs Actual — trend (line) ───────────────────────────────── */}
-      <Section
-        title="Planned vs Actual — Quarterly Trend"
-        subtitle="Planned target vs actual won value across Q1–Q4"
-      >
-        {!hasPlanVsActual ? (
-          <Empty />
-        ) : (
-          <ResponsiveContainer width="100%" height={280}>
-            <LineChart
-              data={planVsActualTrend}
-              margin={{ top: 8, right: 16, bottom: 0, left: 0 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
-              <XAxis
-                dataKey="quarter"
-                tick={{ fontSize: 11, fill: '#374151', fontWeight: 600 }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis
-                tickFormatter={fmtShort}
-                tick={{ fontSize: 11, fill: '#6b7280' }}
-                axisLine={false}
-                tickLine={false}
-                width={56}
-              />
-              <Tooltip
-                formatter={(v) => fmtFull(Number(v))}
-                contentStyle={{ borderRadius: 8, fontSize: 12 }}
-              />
-              <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
-              <Line
-                type="monotone"
-                dataKey="Planned"
-                name="Planned (Target)"
-                stroke="#6366f1"
-                strokeWidth={2.5}
-                dot={{ r: 4 }}
-                activeDot={{ r: 6 }}
-              />
-              <Line
-                type="monotone"
-                dataKey="Actual"
-                name="Actual (Won)"
-                stroke="#10b981"
-                strokeWidth={2.5}
-                dot={{ r: 4 }}
-                activeDot={{ r: 6 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        )}
-      </Section>
-
-      {/* ── Pipeline by Stage ─────────────────────────────────────────────── */}
-      <Section title="Pipeline by Stage" subtitle="Value and count per stage">
-        {opps.length === 0 ? (
-          <Empty />
-        ) : (
-          <div className="space-y-3">
-            {stageData.map(({ stage, count, value }) => (
-              <div key={stage} className="flex items-center gap-3">
-                <div className="w-24 shrink-0 text-right">
-                  <span className="text-xs font-semibold text-gray-700">{stage}</span>
-                </div>
-                <div className="flex-1">
-                  <div className="h-3 w-full overflow-hidden rounded-full bg-gray-100">
-                    <div
-                      className="h-full rounded-full transition-all"
-                      style={{
-                        width: `${(value / maxStageVal) * 100}%`,
-                        backgroundColor: STAGE_COLORS[stage] ?? '#94a3b8',
-                      }}
-                    />
-                  </div>
-                </div>
-                <div className="w-44 shrink-0 text-right">
-                  <span className="text-sm font-bold text-gray-900">{fmtFull(value)}</span>
-                  <span className="ml-1.5 text-xs text-gray-400">({count})</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </Section>
-
-      {/* ── Quarterly ─────────────────────────────────────────────────────── */}
-      <Section
-        title="Quarterly Pipeline & Win"
-        subtitle="Pipeline and won value by expected close quarter"
-      >
-        {qtrData.length === 0 ? (
-          <Empty />
-        ) : (
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={qtrData} barGap={4} barCategoryGap="30%">
-              <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
-              <XAxis
-                dataKey="quarter"
-                tick={{ fontSize: 11, fill: '#374151' }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis
-                tickFormatter={fmtShort}
-                tick={{ fontSize: 11, fill: '#6b7280' }}
-                axisLine={false}
-                tickLine={false}
-                width={56}
-              />
-              <Tooltip
-                formatter={(v) => fmtFull(Number(v))}
-                contentStyle={{ borderRadius: 8, fontSize: 12 }}
-              />
-              <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
-              <Bar dataKey="pipeline" name="Pipeline" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="win" name="Win" fill="#10b981" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        )}
-      </Section>
-
-      {/* ── Win/Loss + Status ────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <Section title="Win vs Loss vs Active">
-          {opps.length === 0 ? (
-            <Empty />
-          ) : (
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                {/* Zero-count slices are dropped (no "Lost 0%" label) and the
-                    radius leaves room so labels don't clip at the card edge. */}
-                <Pie
-                  data={[
-                    { name: 'Won', value: wins.length, fill: '#10b981' },
-                    { name: 'Lost', value: losses.length, fill: '#ef4444' },
-                    { name: 'Active', value: active.length, fill: '#3b82f6' },
-                  ].filter((d) => d.value > 0)}
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={60}
-                  dataKey="value"
-                  label={({ name, percent }) => `${name} ${Math.round((percent ?? 0) * 100)}%`}
-                  labelLine={false}
-                />
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          )}
-        </Section>
-
-        <Section title="Loss Reasons">
-          {lossData.length === 0 ? (
-            <Empty />
-          ) : (
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={lossData} layout="vertical" barCategoryGap="25%">
-                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" horizontal={false} />
-                <XAxis
-                  type="number"
-                  tick={{ fontSize: 11, fill: '#6b7280' }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="reason"
-                  tick={{ fontSize: 11, fill: '#374151' }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={130}
-                />
-                <Tooltip />
-                <Bar dataKey="count" fill="#ef4444" radius={[0, 4, 4, 0]} name="Deals" />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </Section>
-
-        <Section title="Active Deals by Status">
-          {statusData.length === 0 ? (
-            <Empty />
-          ) : (
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie
-                  data={statusData
-                    .filter((s) => s.count > 0)
-                    .map((s) => ({ name: s.status, value: s.count }))}
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={60}
-                  dataKey="value"
-                  label={({ name, percent }) => `${name} ${Math.round((percent ?? 0) * 100)}%`}
-                  labelLine={false}
-                >
-                  {statusData
-                    .filter((s) => s.count > 0)
-                    .map((s, i) => (
-                      <Cell
-                        key={i}
-                        fill={STATUS_COLORS[s.status] ?? PALETTE[i % PALETTE.length]}
-                      />
-                    ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          )}
-        </Section>
-      </div>
-
-      {/* ── Loss review ───────────────────────────────────────────────────── */}
-      <Section
-        title="Loss Review"
-        subtitle="Every lost deal with its reason — the post-mortem list"
-      >
-        {losses.length === 0 ? (
-          <p className="py-8 text-center text-sm text-gray-400">
-            No lost deals in this period. 🎉
-          </p>
-        ) : (
-          <div className="overflow-x-auto rounded-lg border border-gray-200">
-            <table className="min-w-full divide-y divide-gray-200 text-sm">
-              <thead className="bg-gray-50">
-                <tr>
-                  {['Opportunity', 'Account', 'Manager', 'Value', 'Reason', 'Details'].map(
-                    (h) => (
-                      <th
-                        key={h}
-                        className={`whitespace-nowrap px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 ${h === 'Value' ? 'text-right' : 'text-left'}`}
-                      >
-                        {h}
-                      </th>
-                    ),
-                  )}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 bg-white">
-                {[...losses]
-                  .sort((a, b) => pipeVal(b) - pipeVal(a))
-                  .map((o) => (
-                    <tr key={o.id} className="hover:bg-gray-50">
-                      <td className="max-w-[200px] truncate px-4 py-2.5 font-medium text-gray-900">
-                        {o.name ?? '—'}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-2.5 text-gray-600">
-                        {o.customer_name ?? '—'}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-2.5 text-gray-600">
-                        {(o.owner as string) ?? '—'}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-2.5 text-right font-semibold tabular-nums text-red-500">
-                        {fmtShort(pipeVal(o))}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-2.5">
-                        <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600">
-                          {o.loss_reason ?? 'Unknown'}
-                        </span>
-                      </td>
-                      <td
-                        className="max-w-[280px] truncate px-4 py-2.5 text-xs text-gray-500"
-                        title={o.loss_description ?? ''}
-                      >
-                        {o.loss_description ?? '—'}
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Section>
-
-      {/* ── Product breakdown ─────────────────────────────────────────────── */}
-      <Section
-        title="Performance by Product"
-        subtitle="Pipeline, wins, and win rate per product"
-      >
-        {prodData.length === 0 ? (
-          <Empty />
-        ) : (
-          <>
-            <div className="mb-3 grid grid-cols-6 gap-2 text-xs font-semibold uppercase tracking-wider text-gray-400">
-              <div className="col-span-2">Product</div>
-              <div className="text-right">Pipeline</div>
-              <div className="text-right">Win Value</div>
-              <div className="text-right">Deals</div>
-              <div className="text-right">Win Rate</div>
-            </div>
-            <div className="space-y-2">
-              {prodData.map(({ product, value, winValue, count, winRate }, i) => (
-                <div
-                  key={product}
-                  className="grid grid-cols-6 gap-2 items-center rounded-xl bg-gray-50 px-3 py-2.5"
-                >
-                  <div className="col-span-2 flex items-center gap-2">
-                    <span
-                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
-                      style={{ backgroundColor: PALETTE[i % PALETTE.length] }}
-                    >
-                      {i + 1}
-                    </span>
-                    <span className="text-sm font-medium text-gray-900 truncate">
-                      {product}
-                    </span>
-                  </div>
-                  <div className="text-right text-sm text-gray-700">{fmtShort(value)}</div>
-                  <div className="text-right text-sm font-semibold text-green-600">
-                    {fmtShort(winValue)}
-                  </div>
-                  <div className="text-right text-sm text-gray-500">{count}</div>
-                  <div className="text-right">
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${winRate >= 50 ? 'bg-green-100 text-green-700' : winRate > 0 ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'}`}
-                    >
-                      {winRate}%
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-      </Section>
-
-      {/* ── Country + Leaderboard ─────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Section title="Pipeline by Country" subtitle="Top 10 countries by deal value">
-          {cntryData.length === 0 ? (
-            <Empty />
-          ) : (
-            <div className="space-y-2">
-              {cntryData.map(({ country, count, value, wins: w }, i) => (
-                <div
-                  key={country}
-                  className="flex items-center gap-3 rounded-xl bg-gray-50 px-3 py-2"
-                >
-                  <span
-                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
-                    style={{ backgroundColor: PALETTE[i % PALETTE.length] }}
-                  >
-                    {i + 1}
-                  </span>
-                  <span className="flex-1 text-sm font-medium text-gray-900">{country}</span>
-                  <span className="text-xs text-green-600 font-semibold">{w} won</span>
-                  <span className="text-sm font-bold text-gray-900 w-20 text-right">
-                    {fmtShort(value)}
-                  </span>
-                  <span className="text-xs text-gray-400 w-14 text-right">{count} deals</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </Section>
-
-        <Section title="Manager Leaderboard" subtitle="Ranked by total win value">
-          {mgrData.length === 0 ? (
-            <Empty />
-          ) : (
-            <div className="space-y-2">
-              {mgrData.map((m, i) => (
-                <div
-                  key={m.name}
-                  className="flex items-center gap-3 rounded-xl bg-gray-50 px-3 py-2.5"
-                >
-                  <span
-                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${i === 0 ? 'bg-amber-400 text-white' : i === 1 ? 'bg-gray-300 text-gray-700' : i === 2 ? 'bg-orange-300 text-white' : 'bg-gray-100 text-gray-500'}`}
-                  >
-                    {i + 1}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-gray-900">{m.name}</p>
-                    <p className="text-xs text-gray-400">
-                      {m.total} deals · {m.rate}% win rate
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-bold text-green-600">{fmtShort(m.winAmt)}</p>
-                    <p className="text-xs text-gray-400">{fmtShort(m.pipeline)} active</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </Section>
-      </div>
-
-      {/* ── Full manager table ────────────────────────────────────────────── */}
-      <Section
-        title="Full Manager Performance Table"
-        subtitle="Complete breakdown per sales manager"
-      >
-        {mgrData.length === 0 ? (
-          <Empty />
-        ) : (
-          <>
-            <div className="mb-3 grid grid-cols-8 gap-2 text-xs font-semibold uppercase tracking-wider text-gray-400">
-              <div className="col-span-2">Manager</div>
-              <div className="text-right">Target</div>
-              <div className="text-right">Win</div>
-              <div className="text-right">Gap</div>
-              <div className="text-right">Pipeline</div>
-              <div className="text-right">Win Rate</div>
-              <div className="text-right">Deals</div>
-            </div>
-            <div className="space-y-2">
-              {mgrData.map((m) => (
-                <div
-                  key={m.name}
-                  className="grid grid-cols-8 gap-2 items-center rounded-xl bg-gray-50 px-3 py-2.5"
-                >
-                  <div className="col-span-2 text-sm font-semibold text-gray-900">{m.name}</div>
-                  <div className="text-right text-sm text-gray-500">
-                    {m.target > 0 ? fmtShort(m.target) : '—'}
-                  </div>
-                  <div className="text-right text-sm font-semibold text-green-600">
-                    {fmtShort(m.winAmt)}
-                  </div>
-                  <div
-                    className={`text-right text-sm font-semibold ${m.gap <= 0 ? 'text-green-600' : 'text-red-500'}`}
-                  >
-                    {m.gap <= 0 ? '✓' : fmtShort(m.gap)}
-                  </div>
-                  <div className="text-right text-sm text-gray-700">{fmtShort(m.pipeline)}</div>
-                  <div className="text-right">
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${m.rate >= 50 ? 'bg-green-100 text-green-700' : m.rate > 0 ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'}`}
-                    >
-                      {m.rate}%
-                    </span>
-                  </div>
-                  <div className="text-right text-sm text-gray-500">{m.total}</div>
-                </div>
-              ))}
-              <div className="grid grid-cols-8 gap-2 items-center border-t border-gray-200 pt-3 mt-1">
-                <div className="col-span-2 text-xs font-bold uppercase tracking-wider text-gray-400">
-                  Total
-                </div>
-                <div className="text-right text-sm font-bold text-gray-700">
-                  {fmtShort(overallTarget)}
-                </div>
-                <div className="text-right text-sm font-bold text-green-600">
-                  {fmtShort(mgrData.reduce((s, m) => s + m.winAmt, 0))}
-                </div>
-                <div className="text-right text-sm font-bold text-gray-700">
-                  {fmtShort(Math.abs(mgrData.reduce((s, m) => s + m.gap, 0)))}
-                </div>
-                <div className="text-right text-sm font-bold text-gray-700">
-                  {fmtShort(mgrData.reduce((s, m) => s + m.pipeline, 0))}
-                </div>
-                <div />
-                <div className="text-right text-sm font-bold text-gray-500">{opps.length}</div>
-              </div>
-            </div>
-          </>
-        )}
-      </Section>
     </div>
   )
 }
 
-// ── Sales Funnel as Pie Chart ─────────────────────────────────────────────────
-function SalesFunnel({
-  data,
+// ── Hero KPI tile ─────────────────────────────────────────────────────────────
+function KpiTile({
+  label,
+  value,
+  sub,
+  accent,
+  valueClass = 'text-slate-900',
+  progress,
+  progressLabel,
 }: {
-  data: { stage: string; count: number; value: number; fill: string }[]
+  label: string
+  value: string
+  sub?: string
+  /** Tailwind border-color class for the top accent. */
+  accent: string
+  valueClass?: string
+  /** 0-100 — renders a slim progress bar under the value. */
+  progress?: number
+  progressLabel?: string
 }) {
-  const total = data.reduce((s, d) => s + d.count, 0)
-
-  // Recharts passes label geometry as string | number; coerce before math.
-  type PieLabelProps = {
-    cx?: string | number
-    cy?: string | number
-    midAngle?: string | number
-    innerRadius?: string | number
-    outerRadius?: string | number
-    name?: string | number
-    count?: number
-  }
-  const renderLabel = ({
-    cx,
-    cy,
-    midAngle,
-    innerRadius,
-    outerRadius,
-    name,
-    count,
-  }: PieLabelProps) => {
-    if (!count) return null
-    const RADIAN = Math.PI / 180
-    const inner = Number(innerRadius)
-    const radius = inner + (Number(outerRadius) - inner) * 0.5
-    const x = Number(cx) + radius * Math.cos(-Number(midAngle) * RADIAN)
-    const y = Number(cy) + radius * Math.sin(-Number(midAngle) * RADIAN)
-    return (
-      <text
-        x={x}
-        y={y}
-        fill="white"
-        textAnchor="middle"
-        dominantBaseline="central"
-        fontSize={12}
-        fontWeight={600}
-      >
-        {name}
-      </text>
-    )
-  }
-
   return (
-    <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
-      {/* Pie */}
-      <div className="h-56 w-full sm:w-72 shrink-0">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={data}
-              cx="50%"
-              cy="50%"
-              outerRadius={100}
-              dataKey="count"
-              nameKey="stage"
-              labelLine={false}
-              label={renderLabel}
-            >
-              {data.map((d) => (
-                <Cell key={d.stage} fill={d.fill} />
-              ))}
-            </Pie>
-            <Tooltip formatter={(v, name) => [`${v} deals`, String(name)]} />
-          </PieChart>
-        </ResponsiveContainer>
-      </div>
-
-      {/* Legend + stats */}
-      <div className="flex-1 min-w-0 space-y-2">
-        {data.map((d) => (
-          <div
-            key={d.stage}
-            className="grid items-center gap-2 rounded-xl bg-gray-50 px-3 py-2.5"
-            style={{ gridTemplateColumns: '12px auto 1fr auto auto' }}
-          >
-            <span
-              className="h-3 w-3 shrink-0 rounded-full"
-              style={{ backgroundColor: d.fill }}
+    <div
+      className={`rounded-xl border border-gray-100 border-t-4 ${accent} bg-white p-4 shadow-sm transition-shadow hover:shadow-md`}
+    >
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{label}</p>
+      <p className={`mt-1 text-2xl font-bold leading-none ${valueClass}`}>{value}</p>
+      {progress !== undefined && (
+        <div className="mt-2">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+            <div
+              className="h-full rounded-full bg-emerald-500 transition-all"
+              style={{ width: `${progress}%` }}
             />
-            <span className="text-sm font-semibold text-gray-800 whitespace-nowrap">
-              {d.stage}
-            </span>
-            <span className="text-sm text-gray-500 text-center whitespace-nowrap">
-              {d.count} deal{d.count !== 1 ? 's' : ''}
-            </span>
-            <span className="text-sm font-semibold text-gray-900 text-right whitespace-nowrap">
-              {fmtShort(d.value)}
-            </span>
-            <span className="w-9 text-right text-xs text-gray-400 whitespace-nowrap">
-              {total > 0 ? `${Math.round((d.count / total) * 100)}%` : '—'}
-            </span>
           </div>
-        ))}
-      </div>
+          {progressLabel && <p className="mt-1 text-[11px] text-gray-400">{progressLabel}</p>}
+        </div>
+      )}
+      {sub && <p className="mt-1 text-[11px] text-gray-400">{sub}</p>}
     </div>
   )
 }
