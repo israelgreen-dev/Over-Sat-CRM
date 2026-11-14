@@ -142,6 +142,7 @@ Run in order in the Supabase SQL editor. All are idempotent (safe to re-run).
 | 016 | Admin-set password vault (service-role-only table; admin-only viewing) |
 | 017 | Follow-up date on leads and opportunities |
 | 018 | Lead notes (timestamped, like opportunities) + description data migration |
+| 019 | Partner role: view-only enforced on notes / lead notes / contacts |
 
 ## Deploying
 

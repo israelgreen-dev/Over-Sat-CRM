@@ -140,6 +140,7 @@ export default function PipelineTab({
   onOppDeleted,
   teamNames = [],
   teamOpps = [],
+  readOnly = false,
 }: {
   opportunities: Opportunity[]
   addFormOpen?: boolean
@@ -157,6 +158,8 @@ export default function PipelineTab({
   teamNames?: string[]
   /** Teammates' opportunities, shown read-only when Team view is on. */
   teamOpps?: Opportunity[]
+  /** Partners: everything opens view-only, nothing can be created. */
+  readOnly?: boolean
 }) {
   const [selected, setSelected] = useState<Opportunity | null>(null)
   // Team view: also show teammates' records (read-only).
@@ -762,15 +765,15 @@ export default function PipelineTab({
           onClose={() => setSelected(null)}
           onSaved={handleSaved}
           onDeleted={() => handleDeleted(selected.id)}
-          canDelete={canDelete && !isTeamOpp(selected)}
+          canDelete={canDelete && !isTeamOpp(selected) && !readOnly}
           products={products}
           managers={managers}
           probabilityDefaults={probabilityDefaults}
-          readOnly={isTeamOpp(selected)}
+          readOnly={readOnly || isTeamOpp(selected)}
         />
       )}
 
-      {addFormOpen && (
+      {addFormOpen && !readOnly && (
         <AddOpportunityModal
           products={products}
           managers={managers}

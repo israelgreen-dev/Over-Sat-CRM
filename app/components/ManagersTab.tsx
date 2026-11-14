@@ -3,7 +3,10 @@
 import { useState } from 'react'
 import { type Opportunity } from '@/lib/opportunity'
 import { type Lead } from './LeadsTab'
-import { MANAGER_TARGETS, MANAGER_COLORS } from './DashboardAnalytics'
+// Legacy fallbacks (formerly from DashboardAnalytics) — real values always
+// arrive via props from Dashboard; these just keep the defaults typed.
+const MANAGER_TARGETS: Record<string, number> = {}
+const MANAGER_COLORS: Record<string, string> = {}
 import ManagerDocuments from './ManagerDocuments'
 import { toUSD, fmtUSD } from '@/lib/currency'
 
@@ -30,6 +33,7 @@ export default function ManagersTab({
   managers: managerNames = MANAGERS,
   managerColors: managerColorsProp = MANAGER_COLORS,
   uploaderName = '',
+  readOnly = false,
 }: {
   opportunities: Opportunity[]
   leads?: Lead[]
@@ -37,6 +41,8 @@ export default function ManagersTab({
   managers?: string[]
   managerColors?: Record<string, string>
   uploaderName?: string
+  /** Partners: hide document upload/delete (server enforces this too). */
+  readOnly?: boolean
 }) {
   const managerColors = managerColorsProp
   const managers = managerNames.map((name) => {
@@ -90,6 +96,7 @@ export default function ManagersTab({
         opps={opps}
         onBack={() => setSelected(null)}
         uploaderName={uploaderName}
+        readOnly={readOnly}
       />
     )
   }
@@ -128,12 +135,14 @@ function ManagerDrillDown({
   opps,
   onBack,
   uploaderName,
+  readOnly = false,
 }: {
   m: ManagerRow
   color: string
   opps: Opportunity[]
   onBack: () => void
   uploaderName: string
+  readOnly?: boolean
 }) {
   const sorted = [...opps].sort(
     (a, b) =>
@@ -246,7 +255,12 @@ function ManagerDrillDown({
       </div>
 
       {/* Documents */}
-      <ManagerDocuments managerName={m.name} uploaderName={uploaderName} color={color} />
+      <ManagerDocuments
+        managerName={m.name}
+        uploaderName={uploaderName}
+        color={color}
+        readOnly={readOnly}
+      />
     </div>
   )
 }

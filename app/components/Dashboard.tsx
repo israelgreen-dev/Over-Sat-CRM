@@ -6,7 +6,11 @@ import { supabase } from '@/lib/supabase'
 import { fetchAllRows } from '@/lib/fetch-all'
 import { toUSD } from '@/lib/currency'
 import { type Opportunity, DEFAULT_PROBABILITY } from '@/lib/opportunity'
-import DashboardAnalytics, { MANAGER_TARGETS } from './DashboardAnalytics'
+import FollowUpsCard from './FollowUpsCard'
+
+// Legacy fallback for stored manager targets (superseded by product target
+// rows — see weightedFromRows). Kept empty; real targets come from settings.
+const MANAGER_TARGETS: Record<string, number> = {}
 import ManagersTab from './ManagersTab'
 import LeadsTab, { type Lead } from './LeadsTab'
 import PipelineTab from './PipelineTab'
@@ -62,7 +66,6 @@ type Tab =
   | 'Sales Managers'
   | 'Leads'
   | 'Opportunities'
-  | 'Analytics'
   | 'Projection'
   | 'Targets'
   | 'Settings'
@@ -75,7 +78,6 @@ const TAB_STYLE: Record<Tab, { active: string; dot: string }> = {
   'Sales Managers': { active: 'bg-blue-600 text-white shadow-sm', dot: 'bg-blue-400' },
   Leads: { active: 'bg-emerald-600 text-white shadow-sm', dot: 'bg-emerald-400' },
   Opportunities: { active: 'bg-orange-500 text-white shadow-sm', dot: 'bg-orange-400' },
-  Analytics: { active: 'bg-indigo-600 text-white shadow-sm', dot: 'bg-indigo-400' },
   Projection: { active: 'bg-violet-600 text-white shadow-sm', dot: 'bg-violet-400' },
   Targets: { active: 'bg-amber-500 text-white shadow-sm', dot: 'bg-amber-400' },
   Settings: { active: 'bg-gray-600 text-white shadow-sm', dot: 'bg-gray-400' },
@@ -606,34 +608,25 @@ export default function Dashboard() {
             'Sales Managers',
             'Leads',
             'Opportunities',
-            'Analytics',
             'Projection',
             'Targets',
             'Settings',
           ]
         : isAdmin && !isHoS
-          ? ['Dashboard', 'Leads', 'Opportunities', 'Analytics', 'Projection', 'Targets']
+          ? ['Dashboard', 'Leads', 'Opportunities', 'Projection', 'Targets']
           : isHoS
             ? [
                 'Dashboard',
                 'Sales Managers',
                 'Leads',
                 'Opportunities',
-                'Analytics',
                 'Projection',
                 'Targets',
                 'Settings',
               ]
             : isPartner
-              ? [
-                  'Dashboard',
-                  'Sales Managers',
-                  'Leads',
-                  'Opportunities',
-                  'Analytics',
-                  'Projection',
-                ]
-              : ['Dashboard', 'Leads', 'Opportunities', 'Analytics', 'Projection'],
+              ? ['Dashboard', 'Sales Managers', 'Leads', 'Opportunities', 'Projection']
+              : ['Dashboard', 'Leads', 'Opportunities', 'Projection'],
     [isAdmin, isHoS, isPartner],
   )
   const safeTab: Tab = tabs.includes(activeTab) ? activeTab : 'Dashboard'
@@ -994,6 +987,9 @@ export default function Dashboard() {
               {/* Divider */}
               <div className="mx-1 h-5 w-px bg-gray-200" />
 
+              {/* Partners are view-only: no create buttons. */}
+              {profile?.role !== 'partner' && (
+              <>
               {/* New Lead — green CTA */}
               <button
                 onClick={handleNewLead}
@@ -1029,6 +1025,8 @@ export default function Dashboard() {
                 </svg>
                 New Opportunity
               </button>
+              </>
+              )}
 
               {/* Print — icon only */}
               <button
@@ -1204,16 +1202,30 @@ export default function Dashboard() {
 
           {/* ── Tab content ─────────────────────────────────────────────────── */}
           {safeTab === 'Dashboard' && (
-            <DashboardAnalytics
-              opportunities={visibleOpps}
-              viewAs={isFullAccess ? HEAD_OF_SALES : viewAs}
-              overallTarget={overallTarget}
-              managerTargets={managerTargets}
-              managers={managers}
-              managerColors={managerColors}
-              leads={leadsError ? [] : visibleLeads}
-              onNavigate={(tab) => setActiveTab(tab)}
-            />
+            <div className="space-y-6">
+              {/* Actionable first: what needs attention today */}
+              <FollowUpsCard
+                leads={leadsError ? [] : visibleLeads}
+                opportunities={visibleOpps}
+                showOwner={isFullAccess}
+                onNavigate={(tab) => setActiveTab(tab)}
+              />
+              {/* The management dashboard (formerly the Analytics tab) */}
+              <AnalyticsTab
+                opportunities={visibleOpps}
+                managers={isAdmin && !isHoS ? [viewAs] : allManagers}
+                managerTargets={
+                  isAdmin && !isHoS ? { [viewAs]: managerTargets[viewAs] ?? 0 } : managerTargets
+                }
+                quarterlyTargets={quarterlyTargets}
+                leads={leadsError ? [] : analyticsLeads}
+                managerColors={managerColors}
+                selectedYear={selectedYear}
+                availableYears={availableYears}
+                onYearChange={setSelectedYear}
+                probabilityDefaults={probabilityDefaults}
+              />
+            </div>
           )}
 
           {safeTab === 'Sales Managers' && isFullAccess && (
@@ -1224,6 +1236,7 @@ export default function Dashboard() {
               managers={managers}
               managerColors={managerColors}
               uploaderName={profile?.name ?? ''}
+              readOnly={profile?.role === 'partner'}
             />
           )}
 
@@ -1281,6 +1294,7 @@ export default function Dashboard() {
                 onOppDeleted={handleOppDeleted}
                 teamNames={teamNames}
                 teamOpps={teamOpps}
+                readOnly={profile?.role === 'partner'}
               />
             </div>
           )}
@@ -1374,22 +1388,6 @@ export default function Dashboard() {
             />
           )}
 
-          {safeTab === 'Analytics' && (
-            <AnalyticsTab
-              opportunities={visibleOpps}
-              managers={isAdmin && !isHoS ? [viewAs] : allManagers}
-              managerTargets={
-                isAdmin && !isHoS ? { [viewAs]: managerTargets[viewAs] ?? 0 } : managerTargets
-              }
-              quarterlyTargets={quarterlyTargets}
-              leads={leadsError ? [] : analyticsLeads}
-              managerColors={managerColors}
-              selectedYear={selectedYear}
-              availableYears={availableYears}
-              onYearChange={setSelectedYear}
-              probabilityDefaults={probabilityDefaults}
-            />
-          )}
         </main>
 
         {/* ── Footer ───────────────────────────────────────────────────────────── */}

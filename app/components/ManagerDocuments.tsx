@@ -52,10 +52,13 @@ export default function ManagerDocuments({
   managerName,
   uploaderName,
   color = '#94a3b8',
+  readOnly = false,
 }: {
   managerName: string
   uploaderName: string
   color?: string
+  /** Partners: list only — the server rejects their uploads/deletes anyway. */
+  readOnly?: boolean
 }) {
   const [docs, setDocs] = useState<Doc[]>([])
   const [loading, setLoading] = useState(true)
@@ -168,7 +171,8 @@ export default function ManagerDocuments({
         </div>
       </div>
 
-      {/* Upload area */}
+      {/* Upload area — hidden for view-only roles */}
+      {!readOnly && (
       <div className="border-b border-gray-50 px-5 py-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
           <div className="flex-1">
@@ -278,13 +282,14 @@ export default function ManagerDocuments({
         </div>
         {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
       </div>
+      )}
 
       {/* Document list */}
       {loading ? (
         <div className="px-5 py-8 text-center text-sm text-gray-400">Loading…</div>
       ) : docs.length === 0 ? (
         <div className="px-5 py-8 text-center text-sm text-gray-400">
-          No documents attached yet. Upload the first one above.
+          {readOnly ? 'No documents attached.' : 'No documents attached yet. Upload the first one above.'}
         </div>
       ) : (
         <ul className="divide-y divide-gray-50">
@@ -359,7 +364,8 @@ export default function ManagerDocuments({
                 </div>
               </div>
 
-              {/* Delete */}
+              {/* Delete — hidden for view-only roles */}
+              {!readOnly && (
               <button
                 onClick={() => handleDelete(doc.id, doc.file_name)}
                 disabled={deleting === doc.id}
@@ -394,6 +400,7 @@ export default function ManagerDocuments({
                   </svg>
                 )}
               </button>
+              )}
             </li>
           ))}
         </ul>
