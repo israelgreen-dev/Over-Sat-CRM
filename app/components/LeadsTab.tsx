@@ -185,6 +185,8 @@ export default function LeadsTab({
   const [filterCountry, setFilterCountry] = useState('')
   const [filterSource, setFilterSource] = useState('')
   const [filterPriority, setFilterPriority] = useState('')
+  // '' = all · 'overdue' = follow-up date passed · 'ontrack' = everything else
+  const [filterFollowUp, setFilterFollowUp] = useState<'' | 'overdue' | 'ontrack'>('')
 
   const [editing, setEditing] = useState<Lead | 'new' | null>(null)
   const [form, setForm] = useState<LeadForm>(emptyForm(''))
@@ -267,6 +269,13 @@ export default function LeadsTab({
         if (filterCountry && (l.country ?? '') !== filterCountry) return false
         if (filterSource && (l.source ?? '') !== filterSource) return false
         if (filterPriority && (l.priority ?? 'Medium') !== filterPriority) return false
+        if (filterFollowUp) {
+          const overdue =
+            !['Dropped', 'Converted'].includes(l.status ?? 'New') &&
+            followUpStatus(l.follow_up_at) === 'overdue'
+          if (filterFollowUp === 'overdue' && !overdue) return false
+          if (filterFollowUp === 'ontrack' && overdue) return false
+        }
         if (search) {
           const q = search.trim().toLowerCase()
           const hit =
@@ -287,6 +296,7 @@ export default function LeadsTab({
       filterCountry,
       filterSource,
       filterPriority,
+      filterFollowUp,
       search,
       notePreview,
     ],
@@ -318,6 +328,7 @@ export default function LeadsTab({
     filterCountry ||
     filterSource ||
     filterPriority ||
+    filterFollowUp ||
     search
   )
   function clearAllFilters() {
@@ -326,6 +337,7 @@ export default function LeadsTab({
     setFilterCountry('')
     setFilterSource('')
     setFilterPriority('')
+    setFilterFollowUp('')
     setSearch('')
   }
 
@@ -754,6 +766,23 @@ export default function LeadsTab({
             {s}
           </button>
         ))}
+
+        {/* Follow-up filter — overdue vs on-track */}
+        <span className="ml-3 text-xs font-semibold uppercase tracking-wider text-gray-400">
+          Follow-up:
+        </span>
+        <button
+          onClick={() => setFilterFollowUp(filterFollowUp === 'overdue' ? '' : 'overdue')}
+          className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${filterFollowUp === 'overdue' ? 'bg-red-600 text-white' : 'bg-red-50 text-red-600 hover:bg-red-100'}`}
+        >
+          ⚠ Overdue
+        </button>
+        <button
+          onClick={() => setFilterFollowUp(filterFollowUp === 'ontrack' ? '' : 'ontrack')}
+          className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${filterFollowUp === 'ontrack' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}`}
+        >
+          On track
+        </button>
       </div>
 
       {/* ── Search bar (same as Opportunities) ───────────────────────────── */}

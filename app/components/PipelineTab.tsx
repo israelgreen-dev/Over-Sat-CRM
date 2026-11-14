@@ -168,6 +168,8 @@ export default function PipelineTab({
   const [filterProduct, setFilterProduct] = useState<string>('')
   const [filterStage, setFilterStage] = useState<string>('')
   const [filterStatus, setFilterStatus] = useState<string>('')
+  // '' = all · 'overdue' = follow-up date passed · 'ontrack' = everything else
+  const [filterFollowUp, setFilterFollowUp] = useState<'' | 'overdue' | 'ontrack'>('')
   const [sortKey, setSortKey] = useState<string>('')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [deletingId, setDeletingId] = useState<string | number | null>(null)
@@ -193,7 +195,8 @@ export default function PipelineTab({
     filterManager ||
     filterProduct ||
     filterStage ||
-    filterStatus
+    filterStatus ||
+    filterFollowUp
   )
 
   function clearAllFilters() {
@@ -202,6 +205,7 @@ export default function PipelineTab({
     setFilterProduct('')
     setFilterStage('')
     setFilterStatus('')
+    setFilterFollowUp('')
   }
 
   function handleSort(field: string) {
@@ -236,6 +240,12 @@ export default function PipelineTab({
     if (filterStage && r.stage?.toLowerCase() !== filterStage.toLowerCase()) return false
     if (filterStatus && (r.status ?? '')?.toLowerCase() !== filterStatus.toLowerCase())
       return false
+    if (filterFollowUp) {
+      const overdue =
+        !['Win', 'Loss'].includes(r.stage) && followUpStatus(r.follow_up_at) === 'overdue'
+      if (filterFollowUp === 'overdue' && !overdue) return false
+      if (filterFollowUp === 'ontrack' && overdue) return false
+    }
     return true
   })
 
@@ -478,6 +488,24 @@ export default function PipelineTab({
           placeholder="All Statuses"
           options={statusOptions}
         />
+        {/* Follow-up filter — overdue vs on-track */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+            Follow-Up
+          </span>
+          <button
+            onClick={() => setFilterFollowUp(filterFollowUp === 'overdue' ? '' : 'overdue')}
+            className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${filterFollowUp === 'overdue' ? 'bg-red-600 text-white' : 'bg-red-50 text-red-600 hover:bg-red-100'}`}
+          >
+            ⚠ Overdue
+          </button>
+          <button
+            onClick={() => setFilterFollowUp(filterFollowUp === 'ontrack' ? '' : 'ontrack')}
+            className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${filterFollowUp === 'ontrack' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}`}
+          >
+            On track
+          </button>
+        </div>
         {anyFilterActive && (
           <button
             onClick={clearAllFilters}
