@@ -202,7 +202,22 @@ export default function LeadsTab({
   const searchRef = useRef<HTMLInputElement>(null)
 
   // Team view: also show territory teammates' leads (read-only).
-  const [teamView, setTeamView] = useState(false)
+  // Defaults ON so teammates see each other immediately; choice is remembered.
+  const [teamView, setTeamViewState] = useState(() => {
+    try {
+      return localStorage.getItem('oversat_team_view_leads') !== 'off'
+    } catch {
+      return true
+    }
+  })
+  const setTeamView = (v: boolean) => {
+    setTeamViewState(v)
+    try {
+      localStorage.setItem('oversat_team_view_leads', v ? 'on' : 'off')
+    } catch {
+      /* per-browser convenience only */
+    }
+  }
   const teamLeadIds = useMemo(() => new Set(teamLeads.map((l) => l.id)), [teamLeads])
   const isTeamLead = useCallback((l: Lead) => teamLeadIds.has(l.id), [teamLeadIds])
 

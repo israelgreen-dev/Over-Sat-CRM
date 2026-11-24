@@ -684,15 +684,20 @@ export default function Dashboard() {
   // tab) matches theirs, case-insensitively. Admin/HoS personas see all data
   // anyway, so this applies to the manager role only.
   const teamNames = useMemo(() => {
-    if (profile?.role !== 'manager') return []
-    const territory = (managerTerritories[profile.name] ?? '').trim().toLowerCase()
+    // The persona whose team applies: a manager's own login, or an admin/HoS
+    // previewing a specific manager through the persona switcher (so admins
+    // can see exactly what that manager sees). Full-access personas see all
+    // data anyway and get no team.
+    const personaName = isFullAccess ? '' : viewAs
+    if (!personaName) return []
+    const territory = (managerTerritories[personaName] ?? '').trim().toLowerCase()
     if (!territory) return []
     return managers.filter(
       (m) =>
-        m !== profile.name &&
+        m.toLowerCase() !== personaName.toLowerCase() &&
         (managerTerritories[m] ?? '').trim().toLowerCase() === territory,
     )
-  }, [profile, managers, managerTerritories])
+  }, [isFullAccess, viewAs, managers, managerTerritories])
 
   const teamLeads = useMemo(
     () =>

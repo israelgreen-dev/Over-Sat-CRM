@@ -163,7 +163,22 @@ export default function PipelineTab({
 }) {
   const [selected, setSelected] = useState<Opportunity | null>(null)
   // Team view: also show teammates' records (read-only).
-  const [teamView, setTeamView] = useState(false)
+  // Defaults ON so teammates see each other immediately; choice is remembered.
+  const [teamView, setTeamViewState] = useState(() => {
+    try {
+      return localStorage.getItem('oversat_team_view_opps') !== 'off'
+    } catch {
+      return true
+    }
+  })
+  const setTeamView = (v: boolean) => {
+    setTeamViewState(v)
+    try {
+      localStorage.setItem('oversat_team_view_opps', v ? 'on' : 'off')
+    } catch {
+      /* per-browser convenience only */
+    }
+  }
   const teamIds = new Set(teamOpps.map((o) => String(o.id)))
   const isTeamOpp = (o: Opportunity) => teamIds.has(String(o.id))
   const [filterText, setFilterText] = useState<string>('')
